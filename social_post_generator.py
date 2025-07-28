@@ -816,12 +816,13 @@ def _create_enhanced_prompt(website_info, business_input, style_instructions,
 
 {base_requirements} about the business
 
-Format as:
-Caption 1: [caption without emojis/hashtags]
+Format as 3 separate captions, each on its own paragraph:
 
-Caption 2: [caption without emojis/hashtags]
+[First caption without emojis/hashtags]
 
-Caption 3: [caption without emojis/hashtags]"""
+[Second caption without emojis/hashtags]
+
+[Third caption without emojis/hashtags]"""
     else:
         return f"""Create 3 engaging social media captions for {company_name} using the uploaded image.
 
@@ -830,12 +831,13 @@ Caption 3: [caption without emojis/hashtags]"""
 {base_requirements}
 - Reference the image content appropriately and naturally
 
-Format as:
-Caption 1: [caption without emojis/hashtags]
+Format as 3 separate captions, each on its own paragraph:
 
-Caption 2: [caption without emojis/hashtags]
+[First caption without emojis/hashtags]
 
-Caption 3: [caption without emojis/hashtags]"""
+[Second caption without emojis/hashtags]
+
+[Third caption without emojis/hashtags]"""
 
 def _create_basic_prompt(business_input, style_instructions, length_map, 
                         caption_style, caption_length, cta_instruction, text_only_mode):
@@ -856,24 +858,26 @@ def _create_basic_prompt(business_input, style_instructions, length_map,
 {base_requirements}
 - Create engaging content about typical {business_type} activities, values, or services
 
-Format as:
-Caption 1: [caption without emojis/hashtags]
+Format as 3 separate captions, each on its own paragraph:
 
-Caption 2: [caption without emojis/hashtags]
+[First caption without emojis/hashtags]
 
-Caption 3: [caption without emojis/hashtags]"""
+[Second caption without emojis/hashtags]
+
+[Third caption without emojis/hashtags]"""
     else:
         return f"""Create 3 engaging social media captions for a {business_type} using this image.
 
 {base_requirements}
 - Reference the image content naturally
 
-Format as:
-Caption 1: [caption without emojis/hashtags]
+Format as 3 separate captions, each on its own paragraph:
 
-Caption 2: [caption without emojis/hashtags]
+[First caption without emojis/hashtags]
 
-Caption 3: [caption without emojis/hashtags]"""
+[Second caption without emojis/hashtags]
+
+[Third caption without emojis/hashtags]"""
 
 def _generate_with_openai(prompt, image_data, use_premium_model, text_only_mode):
     """Generate captions using OpenAI API with duplicate checking."""
