@@ -28,6 +28,18 @@ try:
 except ImportError:
     CLIPBOARD_AVAILABLE = False
 
+# Check for image clipboard support
+try:
+    from PIL import ImageGrab
+    # Test if clipboard functionality works
+    try:
+        ImageGrab.grabclipboard()
+        IMAGE_CLIPBOARD_AVAILABLE = True
+    except:
+        IMAGE_CLIPBOARD_AVAILABLE = False
+except ImportError:
+    IMAGE_CLIPBOARD_AVAILABLE = False
+
 # === Constants ===
 COMPANY_DATA_FILE = "company_profiles.json"
 USED_CAPTIONS_FILE = "used_captions.json"
@@ -1318,9 +1330,17 @@ def _handle_image_selection():
     """Handle image selection UI and logic."""
     st.subheader("📷 Choose Your Image")
     
+    # Build options list based on available functionality
+    image_options = ["📁 Upload File"]
+    
+    if IMAGE_CLIPBOARD_AVAILABLE:
+        image_options.append("📋 Paste from Clipboard")
+    
+    image_options.extend(["🌐 Use Website Image", "📝 Text-Only (No Image)"])
+    
     image_option = st.radio(
         "Content Creation Mode:",
-        ["📁 Upload File", "📋 Paste from Clipboard", "🌐 Use Website Image", "📝 Text-Only (No Image)"],
+        image_options,
         help="Select how you want to create your social media content",
         horizontal=False
     )
@@ -1382,7 +1402,7 @@ def _display_image_preview(image, uploaded_file):
 
 def _handle_clipboard_paste():
     """Handle clipboard paste functionality."""
-    if CLIPBOARD_AVAILABLE:
+    if IMAGE_CLIPBOARD_AVAILABLE:
         col_btn, col_status = st.columns([1, 1])
         with col_btn:
             if st.button("📋 Paste Image", help="Click after copying an image (Ctrl+C)", type="primary"):
@@ -1403,7 +1423,12 @@ def _handle_clipboard_paste():
         with col_status:
             st.info("💡 **How to paste:**\n1. Copy image (Ctrl+C)\n2. Click 'Paste Image' button")
     else:
-        st.warning("⚠️ Clipboard not available. Use 'Upload File' instead.")
+        st.warning("⚠️ **Clipboard paste not available in cloud environment.**")
+        st.info("💡 **Alternative options:**")
+        st.info("• Use '📁 Upload File' to select an image")
+        st.info("• Use '🌐 Use Website Image' to grab from a website")
+        st.info("• Use '📝 Text-Only' for captions without images")
+        st.info("📝 Note: Clipboard paste works when running locally on Windows/Mac")
     
     return None
 
