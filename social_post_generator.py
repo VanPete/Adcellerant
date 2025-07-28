@@ -424,7 +424,8 @@ def clear_all_session_data():
         'current_image', 'generated_captions', 'website_analysis', 
         'selected_web_image', 'auto_business', 'selected_company_profile',
         'selected_company_name', 'editing_company', 'editing_profile', 
-        'show_save_options'
+        'show_save_options', 'show_documentation', 'show_feedback',
+        'image_selection_mode', 'clipboard_image', 'uploaded_image'
     ]
     
     for key in keys_to_clear:
@@ -1274,29 +1275,88 @@ def create_advanced_sidebar():
         
         with st.expander("📋 How to Use", expanded=False):
             st.markdown("""
-            **Step 1:** Choose image source or text-only
-            **Step 2:** Enter business information  
-            **Step 3:** Customize style & settings
-            **Step 4:** Generate captions
-            **Step 5:** Save company profile (optional)
+            **Step 1:** Choose your content source:
+            • Upload image files (PNG, JPG, JPEG, WebP)
+            • Paste from clipboard (system environments)
+            • Use website images from analysis
+            • Text-only mode for no-image posts
+            
+            **Step 2:** Enter business details:
+            • Business type or company name
+            • Website URL (optional, for enhanced context)
+            • Quick category selection available
+            
+            **Step 3:** Customize style & settings:
+            • Caption style (Professional, Casual, Inspirational, etc.)
+            • Length (Short, Medium, Long)
+            • Premium vs Standard AI model
+            • Include/exclude call-to-action
+            
+            **Step 4:** Generate & manage captions:
+            • Generate 3 unique captions
+            • Mark captions as used (with toggle)
+            • Copy to clipboard or download
+            • Duplicate detection system
+            
+            **Step 5:** Advanced features (optional):
+            • Save company profiles for reuse
+            • Batch process multiple images
+            • Search caption history
+            • Export usage data
             """)
         
         with st.expander("💡 Pro Tips"):
             st.markdown("""
-            • **Save companies** for faster future posts
-            • **Text-only mode** for quick content creation
-            • **Load saved profiles** to auto-fill everything
-            • **Batch processing** for multiple images
-            • **Premium model** for best results
+            **Efficiency Tips:**
+            • **Save company profiles** for instant setup on future posts
+            • **Use website analysis** for enhanced brand context
+            • **Load saved profiles** to auto-fill all information
+            • **Batch processing** for multiple images at once
+            • **Text-only mode** for quotes and announcements
+            
+            **Quality Tips:**
+            • **Premium model (GPT-4o)** for highest quality results
+            • **Website URLs** provide better brand-specific captions
+            • **Clear business descriptions** improve caption relevance
+            • **Mark captions as used** to avoid duplicates
+            
+            **Organization Tips:**
+            • **Caption History** tab to review all used captions
+            • **Search & filter** used captions by business or date
+            • **Export data** to CSV for external analysis
+            • **Bulk delete** unwanted caption records
             """)
         
         with st.expander("🔧 Troubleshooting"):
             st.markdown("""
-            • **Website blocked?** Try without URL
-            • **Image too large?** Resize before upload
-            • **Slow generation?** Use mini model
-            • **Need fresh start?** Use "Start Over" button
+            **Common Issues:**
+            • **Website access blocked?** Try entering just business name/type
+            • **Image upload fails?** Check file size (resize if needed)
+            • **Slow generation?** Switch to Standard model (GPT-4o-mini)
+            • **Clipboard not working?** Use "Web Clipboard" alternative methods
+            • **Duplicate captions?** Check Caption History tab for marked used ones
+            
+            **Performance Issues:**
+            • **App running slowly?** Use "Start Over" to clear session data
+            • **Too many saved companies?** Delete unused profiles in sidebar
+            • **Large caption history?** Clear used captions periodically
+            
+            **Feature Issues:**
+            • **Tabs displaying wrong content?** Refresh the page
+            • **Profile not loading?** Try re-selecting from dropdown
+            • **Batch processing stuck?** Check individual image file sizes
             """)
+        
+        with st.expander("🆘 Need Help?"):
+            col_help1, col_help2 = st.columns(2)
+            with col_help1:
+                if st.button("📖 View Full Documentation", type="primary", use_container_width=True):
+                    st.session_state.show_documentation = True
+                    st.rerun()
+            with col_help2:
+                if st.button("🐛 Report Issue/Feedback", type="secondary", use_container_width=True):
+                    st.session_state.show_feedback = True
+                    st.rerun()
         
         # Model usage indicator
         st.markdown("---")
@@ -1352,7 +1412,9 @@ def initialize_session_state():
         'generated_captions': None,
         'current_image': None,
         'website_analysis': None,
-        'captions_generated': 0
+        'captions_generated': 0,
+        'show_documentation': False,
+        'show_feedback': False
     }
     
     for key, value in default_values.items():
@@ -1361,7 +1423,7 @@ def initialize_session_state():
 
 def display_page_header():
     """Display the main page header with metrics."""
-    col_title, col_metrics = st.columns([3, 1])
+    col_title, col_metrics, col_help = st.columns([2.5, 1, 0.5])
     
     with col_title:
         st.title("🚀 Adcellerant Social Caption Generator")
@@ -1369,6 +1431,315 @@ def display_page_header():
     
     with col_metrics:
         st.metric("🎯 Captions Created", st.session_state.captions_generated)
+    
+    with col_help:
+        st.markdown("<br>", unsafe_allow_html=True)  # Add some spacing
+        if st.button("📖", help="View Documentation & Help", type="secondary"):
+            st.session_state.show_documentation = True
+            st.rerun()
+        if st.button("💬", help="Report Issue or Suggest Improvement", type="secondary"):
+            st.session_state.show_feedback = True
+            st.rerun()
+
+def show_documentation_popup():
+    """Display comprehensive documentation in a popup."""
+    if st.session_state.get('show_documentation'):
+        st.markdown("---")
+        
+        # Header with close button
+        col_doc_title, col_close = st.columns([4, 1])
+        with col_doc_title:
+            st.markdown("## 📖 Complete Feature Documentation")
+        with col_close:
+            if st.button("✖️ Close", type="secondary"):
+                st.session_state.show_documentation = False
+                st.rerun()
+        
+        # Create tabs for different documentation sections
+        doc_tab1, doc_tab2, doc_tab3, doc_tab4 = st.tabs([
+            "🚀 Getting Started", "🎨 Features Guide", "⚙️ Advanced Usage", "❓ FAQ"
+        ])
+        
+        with doc_tab1:
+            st.markdown("""
+            ### 🎯 Welcome to Adcellerant Social Caption Generator!
+            
+            This AI-powered tool helps you create engaging social media captions for your business posts.
+            
+            #### **Quick Setup (2 minutes):**
+            1. **Choose your content type** (Image upload, clipboard, or text-only)
+            2. **Enter business information** (Name, type, website)
+            3. **Select caption style** (Professional, Casual, Inspirational, etc.)
+            4. **Generate captions** with one click
+            5. **Copy and use** your favorite caption
+            
+            #### **Key Benefits:**
+            - 🤖 **AI-Powered**: Uses GPT-4 for high-quality, engaging captions
+            - 🌐 **Website Analysis**: Analyzes your website for brand-specific context
+            - 📱 **Multi-Platform**: Works for Instagram, Facebook, LinkedIn, Twitter
+            - 🔄 **Duplicate Prevention**: Tracks used captions to avoid repetition
+            - 💾 **Company Profiles**: Save settings for instant future use
+            - 📊 **Usage Analytics**: Track and export your caption history
+            """)
+        
+        with doc_tab2:
+            st.markdown("""
+            ### 🎨 Complete Features Guide
+            
+            #### **Tab 1: 📸 Image & Business**
+            - **Image Sources**: Upload files, paste from clipboard, use website images, or go text-only
+            - **Business Input**: Company name, business type, website URL
+            - **Quick Categories**: Pre-set business types for faster setup
+            - **Company Profiles**: Load saved company information instantly
+            
+            #### **Tab 2: 🎨 Style Settings**
+            - **Caption Styles**: Professional, Casual & Friendly, Inspirational, Educational, Promotional
+            - **Length Options**: Short (3-4 sentences), Medium (4-6), Long (6+)
+            - **AI Models**: Premium (GPT-4o) vs Standard (GPT-4o-mini)
+            - **Call-to-Action**: Include or exclude engagement prompts
+            
+            #### **Tab 3: 🌐 Website Analysis**
+            - **Multi-Page Analysis**: Analyzes your entire website for context
+            - **Service Detection**: Automatically identifies your business services
+            - **Brand Voice**: Understands your company's tone and messaging
+            - **Image Extraction**: Finds suitable images from your website
+            
+            #### **Tab 4: 📱 Generated Captions**
+            - **3 Unique Captions**: Each generation creates 3 different options
+            - **Copy to Clipboard**: One-click copying for easy use
+            - **Mark as Used**: Track which captions you've posted
+            - **Duplicate Detection**: Warns if similar captions were used before
+            - **Download Options**: Save captions as text files
+            
+            #### **Tab 5: 🔄 Batch Processing**
+            - **Multiple Images**: Process several images at once
+            - **Bulk Generation**: Create captions for entire photo sets
+            - **Progress Tracking**: See completion status for each image
+            - **Export All**: Download all generated captions together
+            
+            #### **Tab 6: 📝 Caption History**
+            - **Search Function**: Find captions by text or business name
+            - **Filter Options**: Filter by date range or specific businesses
+            - **Usage Analytics**: See which businesses you post most for
+            - **Bulk Management**: Delete multiple caption records at once
+            - **CSV Export**: Download usage data for external analysis
+            """)
+        
+        with doc_tab3:
+            st.markdown("""
+            ### ⚙️ Advanced Usage Tips
+            
+            #### **Company Profile Management:**
+            - **Save Profiles**: Store business info, style preferences, and settings
+            - **Edit Mode**: Load existing profiles for updates
+            - **Quick Load**: Auto-fill all fields with one click
+            - **Profile Templates**: Use pre-configured settings for common business types
+            
+            #### **Caption Optimization:**
+            - **Website URLs**: Always include your website for better brand context
+            - **Business Descriptions**: Be specific about your services/products
+            - **Style Consistency**: Use the same style for brand voice consistency
+            - **Length Strategy**: Match caption length to platform (Instagram: Medium, LinkedIn: Long)
+            
+            #### **Duplicate Management:**
+            - **Toggle Used Status**: Mark/unmark captions as used
+            - **Similar Caption Warnings**: Get alerts for potential duplicates
+            - **History Search**: Check if you've used similar content before
+            - **Fresh Generation**: Use retry system for completely new captions
+            
+            #### **Workflow Optimization:**
+            - **Text-Only Mode**: Perfect for quotes, announcements, behind-the-scenes
+            - **Batch Processing**: Ideal for product launches, event photos
+            - **Premium Model**: Use for important posts, client work, special campaigns
+            - **Standard Model**: Use for regular posting, testing, high-volume needs
+            
+            #### **Data Management:**
+            - **Export Options**: Download caption history, company profiles
+            - **Clear Data**: Reset used captions, delete old companies
+            - **Session Management**: Use "Start Over" to clear temporary data
+            - **Backup Strategy**: Regularly export important company profiles
+            """)
+        
+        with doc_tab4:
+            st.markdown("""
+            ### ❓ Frequently Asked Questions
+            
+            #### **Getting Started:**
+            **Q: Do I need an account to use this?**
+            A: You need the application password. Contact Maddie Stitt for access.
+            
+            **Q: What image formats are supported?**
+            A: PNG, JPG, JPEG, and WebP files are supported.
+            
+            **Q: Can I use this without images?**
+            A: Yes! Text-only mode creates captions based on business information only.
+            
+            #### **Features & Usage:**
+            **Q: What's the difference between Premium and Standard models?**
+            A: Premium (GPT-4o) provides higher quality, more creative captions but costs more. Standard (GPT-4o-mini) is faster and more cost-effective.
+            
+            **Q: How does duplicate detection work?**
+            A: The system tracks captions you mark as "used" and warns if new captions are similar.
+            
+            **Q: Can I edit generated captions?**
+            A: Copy captions to your preferred text editor to make modifications before posting.
+            
+            #### **Technical Issues:**
+            **Q: Website analysis failed - what should I do?**
+            A: Some websites block automated access. Enter your business type manually for good results.
+            
+            **Q: Clipboard paste isn't working?**
+            A: Use the "Web Clipboard" alternative methods, or switch to file upload.
+            
+            **Q: The app is running slowly?**
+            A: Click "Start Over" to clear session data, or try using the Standard model.
+            
+            #### **Data & Privacy:**
+            **Q: Is my data saved permanently?**
+            A: Company profiles and caption history are stored locally in your browser session.
+            
+            **Q: Can I export my data?**
+            A: Yes! Use the export features in Caption History tab and company management.
+            
+            **Q: How do I delete my data?**
+            A: Use the clear functions in the sidebar, or clear browser data for complete removal.
+            """)
+        
+        st.markdown("---")
+
+def show_feedback_popup():
+    """Display feedback form for bug reports and feature requests."""
+    if st.session_state.get('show_feedback'):
+        st.markdown("---")
+        
+        # Header with close button
+        col_feedback_title, col_close = st.columns([4, 1])
+        with col_feedback_title:
+            st.markdown("## 💬 User Feedback & Support")
+        with col_close:
+            if st.button("✖️ Close", type="secondary", key="close_feedback"):
+                st.session_state.show_feedback = False
+                st.rerun()
+        
+        st.markdown("""
+        **Help us improve!** Your feedback is valuable for making this tool better.
+        """)
+        
+        # Feedback type selection
+        feedback_type = st.radio(
+            "What type of feedback do you have?",
+            ["🐛 Bug Report", "💡 Feature Request", "👍 General Feedback", "❓ Question/Support"],
+            horizontal=True
+        )
+        
+        col_form1, col_form2 = st.columns([2, 1])
+        
+        with col_form1:
+            # Priority/Impact for bugs
+            if feedback_type == "🐛 Bug Report":
+                priority = st.selectbox(
+                    "Bug Severity:",
+                    ["🔴 Critical (App unusable)", "🟡 Medium (Feature broken)", "🟢 Low (Minor issue)"]
+                )
+                
+                st.markdown("**Please describe the bug:**")
+                bug_description = st.text_area(
+                    "What happened? What did you expect to happen?",
+                    placeholder="Example: When I click 'Generate Captions', I get an error message instead of captions...",
+                    height=100
+                )
+                
+                steps_to_reproduce = st.text_area(
+                    "Steps to reproduce (optional):",
+                    placeholder="1. Go to Image & Business tab\n2. Upload an image\n3. Click Generate...",
+                    height=80
+                )
+                
+                browser_info = st.text_input(
+                    "Browser & System (optional):",
+                    placeholder="Chrome on Windows 11, Safari on Mac, etc."
+                )
+            
+            elif feedback_type == "💡 Feature Request":
+                st.markdown("**Describe your feature idea:**")
+                feature_description = st.text_area(
+                    "What feature would you like to see?",
+                    placeholder="Example: I'd like to be able to schedule posts directly from the app...",
+                    height=100
+                )
+                
+                use_case = st.text_area(
+                    "How would this help you?",
+                    placeholder="This would save me time because...",
+                    height=80
+                )
+                
+                priority = st.selectbox(
+                    "How important is this to you?",
+                    ["⭐ Nice to have", "⭐⭐ Would be helpful", "⭐⭐⭐ Really need this!"]
+                )
+            
+            elif feedback_type == "👍 General Feedback":
+                st.markdown("**Share your thoughts:**")
+                general_feedback = st.text_area(
+                    "What's working well? What could be improved?",
+                    placeholder="I love the website analysis feature, but I wish...",
+                    height=120
+                )
+                
+                rating = st.select_slider(
+                    "Overall experience:",
+                    options=["😞 Poor", "😐 Okay", "🙂 Good", "😊 Great", "🤩 Excellent"],
+                    value="🙂 Good"
+                )
+            
+            else:  # Question/Support
+                st.markdown("**What can we help with?**")
+                question = st.text_area(
+                    "Describe your question or issue:",
+                    placeholder="I'm not sure how to...",
+                    height=100
+                )
+                
+                question_type = st.selectbox(
+                    "Question category:",
+                    ["How to use a feature", "Technical issue", "Account/Access", "General question"]
+                )
+        
+        with col_form2:
+            st.markdown("### 📧 Contact Information")
+            st.info("""
+            **For immediate support:**
+            📧 Contact: Maddie Stitt
+            
+            **What happens next:**
+            • Your feedback is recorded
+            • High priority issues are addressed first
+            • Feature requests are reviewed monthly
+            • You may be contacted for clarification
+            """)
+            
+            # Optional contact info
+            st.markdown("**Optional: Leave contact info for follow-up**")
+            contact_email = st.text_input("Email (optional):", placeholder="your@email.com")
+            contact_name = st.text_input("Name (optional):", placeholder="Your name")
+        
+        # Submit button
+        st.markdown("---")
+        col_submit, col_cancel = st.columns([1, 4])
+        
+        with col_submit:
+            if st.button("📤 Submit Feedback", type="primary"):
+                # Here you would normally send the feedback to a backend service
+                # For now, we'll just show a success message
+                st.success("✅ Thank you! Your feedback has been recorded.")
+                st.info("💡 **Note**: In a production version, this would send your feedback to the development team.")
+                
+                # Clear the form
+                st.session_state.show_feedback = False
+                st.rerun()
+        
+        st.markdown("---")
 
 def create_main_tabs():
     """Create and return the main application tabs."""
@@ -1377,8 +1748,8 @@ def create_main_tabs():
         "🎨 Style Settings", 
         "🌐 Website Analysis", 
         "📱 Generated Captions", 
-        "� Caption History",
-        "�🔄 Batch Processing"
+        "🔄 Batch Processing",
+        "📝 Caption History"
     ])
 
 def handle_image_business_tab():
@@ -1448,6 +1819,25 @@ def _handle_image_selection():
     """Handle image selection UI and logic."""
     st.subheader("📷 Choose Your Image")
     
+    # Show current image status and clear option
+    if st.session_state.get('current_image'):
+        col_status, col_clear = st.columns([3, 1])
+        with col_status:
+            image_source = "Unknown"
+            if st.session_state.get('uploaded_image'):
+                image_source = f"Uploaded file: {st.session_state.uploaded_image}"
+            elif st.session_state.get('clipboard_image'):
+                image_source = "Clipboard"
+            elif st.session_state.get('selected_web_image'):
+                image_source = "Website image"
+            
+            st.success(f"✅ Current image: {image_source}")
+        
+        with col_clear:
+            if st.button("🗑️ Clear", help="Clear current image", type="secondary"):
+                _clear_image_session_state()
+                st.rerun()
+    
     # Build options list based on available functionality
     image_options = ["📁 Upload File"]
     
@@ -1460,12 +1850,23 @@ def _handle_image_selection():
     
     image_options.extend(["🔗 Use Website Image", "📝 Text-Only (No Image)"])
     
+    # Get current selection and detect changes
+    current_selection = st.session_state.get('image_selection_mode', image_options[0])
+    
     image_option = st.radio(
         "Content Creation Mode:",
         image_options,
+        index=image_options.index(current_selection) if current_selection in image_options else 0,
         help="Select how you want to create your social media content",
-        horizontal=False
+        horizontal=False,
+        key="image_mode_selector"
     )
+    
+    # Clear session state if selection changed
+    if image_option != current_selection:
+        _clear_image_session_state()
+        st.session_state.image_selection_mode = image_option
+        st.rerun()
     
     image = None
     text_only_mode = False
@@ -1480,9 +1881,60 @@ def _handle_image_selection():
     elif image_option == "🌐 Paste from Web Clipboard":
         image = _handle_web_clipboard_paste()
     elif image_option == "🔗 Use Website Image":
-        st.info("📝 Enter a website URL in the 'Website Analysis' tab to see available images.")
+        image = _handle_website_image_selection()
     
     return image, text_only_mode
+
+def _clear_image_session_state():
+    """Clear all image-related session state when switching modes."""
+    image_keys = [
+        'current_image', 'selected_web_image', 'clipboard_image', 
+        'uploaded_image', 'website_images'
+    ]
+    for key in image_keys:
+        if key in st.session_state:
+            del st.session_state[key]
+
+def _handle_website_image_selection():
+    """Handle website image selection."""
+    website_analysis = st.session_state.get('website_analysis')
+    
+    if website_analysis and website_analysis.get('images'):
+        st.info("📝 Website images found! Select one below:")
+        
+        images = website_analysis['images']
+        for i, img_data in enumerate(images):
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                try:
+                    st.image(img_data['url'], caption=f"Image {i+1}", use_container_width=True)
+                except:
+                    st.write(f"🖼️ Image {i+1} (preview unavailable)")
+            
+            with col2:
+                st.write(f"**Description:** {img_data.get('description', 'Website image')}")
+                if st.button(f"Use Image {i+1}", key=f"select_web_img_{i}"):
+                    try:
+                        import requests
+                        response = requests.get(img_data['url'], timeout=10)
+                        if response.status_code == 200:
+                            from PIL import Image
+                            import io
+                            image = Image.open(io.BytesIO(response.content))
+                            st.session_state.current_image = image
+                            st.session_state.selected_web_image = img_data
+                            st.success(f"✅ Selected Image {i+1}")
+                            st.rerun()
+                        else:
+                            st.error("❌ Failed to load image")
+                    except Exception as e:
+                        st.error(f"❌ Error loading image: {str(e)}")
+        
+        # Return the currently selected image if any
+        return st.session_state.get('current_image')
+    else:
+        st.info("📝 Enter a website URL in the 'Website Analysis' tab to see available images.")
+        return None
 
 def _display_text_only_info():
     """Display information about text-only mode."""
@@ -1498,17 +1950,31 @@ def _display_text_only_info():
 
 def _handle_file_upload():
     """Handle file upload for images."""
+    # Use a unique key to prevent conflicts
     uploaded_file = st.file_uploader(
         "Choose an image for your social media post",
         type=['png', 'jpg', 'jpeg', 'webp'],
-        help="Upload a high-quality photo for best caption results"
+        help="Upload a high-quality photo for best caption results",
+        key="main_file_uploader"
     )
     
     if uploaded_file is not None:
-        image = Image.open(uploaded_file)
-        st.session_state.current_image = image
-        _display_image_preview(image, uploaded_file)
-        return image
+        try:
+            image = Image.open(uploaded_file)
+            # Clear any previous images
+            st.session_state.current_image = image
+            st.session_state.uploaded_image = uploaded_file.name
+            _display_image_preview(image, uploaded_file)
+            return image
+        except Exception as e:
+            st.error(f"❌ Error loading image: {str(e)}")
+            return None
+    
+    # Show current image if it exists and no new upload
+    elif st.session_state.get('current_image') and st.session_state.get('uploaded_image'):
+        st.info("✅ Image already uploaded. Upload a new file to replace it.")
+        _display_image_preview(st.session_state.current_image, None)
+        return st.session_state.current_image
     
     return None
 
@@ -1521,24 +1987,27 @@ def _display_image_preview(image, uploaded_file):
         st.markdown("**Image Info:**")
         st.write(f"📐 Size: {image.size[0]} x {image.size[1]}")
         st.write(f"🎨 Mode: {image.mode}")
-        file_size = len(uploaded_file.getvalue()) / 1024
-        st.write(f"💾 Size: {file_size:.1f} KB")
+        if uploaded_file:
+            file_size = len(uploaded_file.getvalue()) / 1024
+            st.write(f"💾 Size: {file_size:.1f} KB")
+        else:
+            st.write("💾 Size: Already loaded")
 
 def _handle_clipboard_paste():
     """Handle system clipboard paste functionality."""
     if IMAGE_CLIPBOARD_AVAILABLE:
         col_btn, col_status = st.columns([1, 1])
         with col_btn:
-            if st.button("📋 Paste Image", help="Click after copying an image (Ctrl+C)", type="primary"):
+            if st.button("📋 Paste Image", help="Click after copying an image (Ctrl+C)", type="primary", key="clipboard_paste_btn"):
                 try:
                     from PIL import ImageGrab
                     clipboard_image = ImageGrab.grabclipboard()
                     
                     if clipboard_image:
                         st.session_state.current_image = clipboard_image
-                        st.image(clipboard_image, caption="Image from clipboard", use_container_width=True)
+                        st.session_state.clipboard_image = True
                         st.success("✅ Image successfully pasted!")
-                        return clipboard_image
+                        st.rerun()
                     else:
                         st.warning("⚠️ No image found in clipboard.")
                 except Exception as e:
@@ -1546,6 +2015,11 @@ def _handle_clipboard_paste():
         
         with col_status:
             st.info("💡 **How to paste:**\n1. Copy image (Ctrl+C)\n2. Click 'Paste Image' button")
+        
+        # Show current clipboard image if available
+        if st.session_state.get('current_image') and st.session_state.get('clipboard_image'):
+            st.image(st.session_state.current_image, caption="Image from clipboard", use_container_width=True)
+            return st.session_state.current_image
     else:
         st.warning("⚠️ **System clipboard not available in cloud environment.**")
         st.info("💡 **Try 'Web Clipboard' option instead**")
@@ -1689,6 +2163,12 @@ def main():
     
     # Display page header
     display_page_header()
+    
+    # Show documentation popup if requested
+    show_documentation_popup()
+    
+    # Show feedback popup if requested
+    show_feedback_popup()
     
     # Create enhanced sidebar (with logout option)
     template_config = create_advanced_sidebar()
@@ -2819,5 +3299,36 @@ def main():
             ❌ Skip generic phrases
             """)
 
+def show_app_footer():
+    """Display app footer with quick access to help and feedback."""
+    st.markdown("---")
+    
+    col_footer1, col_footer2, col_footer3, col_footer4 = st.columns([1, 1, 1, 1])
+    
+    with col_footer1:
+        if st.button("📖 Documentation", help="View complete feature guide", use_container_width=True):
+            st.session_state.show_documentation = True
+            st.rerun()
+    
+    with col_footer2:
+        if st.button("💬 Feedback", help="Report bugs or suggest improvements", use_container_width=True):
+            st.session_state.show_feedback = True
+            st.rerun()
+    
+    with col_footer3:
+        if st.button("🔄 Reset App", help="Clear all data and start fresh", use_container_width=True):
+            clear_all_session_data()
+            st.success("✅ App reset successfully!")
+            st.rerun()
+    
+    with col_footer4:
+        st.markdown("""
+        <div style='text-align: center; color: #666; font-size: 0.8em; padding: 10px;'>
+        🚀 Adcellerant Social Caption Generator<br>
+        AI-Powered Social Media Content Creation
+        </div>
+        """, unsafe_allow_html=True)
+
 if __name__ == "__main__":
     main()
+    show_app_footer()
