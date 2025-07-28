@@ -53,6 +53,20 @@ FEEDBACK_FILE = "user_feedback.json"
 STATS_FILE = "app_statistics.json"
 APP_PASSWORD = os.getenv("APP_PASSWORD", "adcellerant2025")  # Change this!
 
+# === Utility Functions ===
+def safe_copy_to_clipboard(text, success_message="✅ Copied!", fallback_message="💡 **Manual Copy:**"):
+    """Safely copy text to clipboard with fallback options."""
+    try:
+        import pyperclip
+        pyperclip.copy(text)
+        st.success(success_message)
+        return True
+    except Exception as e:
+        st.error("❌ Automatic copy failed")
+        st.info(f"{fallback_message} Select the text below and press Ctrl+C (Cmd+C on Mac)")
+        st.code(text, language=None)
+        return False
+
 # === Page Configuration ===
 st.set_page_config(
     page_title="🚀 Adcellerant Social Caption Generator",
@@ -2884,16 +2898,17 @@ def main():
                                 st.subheader(f"✨ Caption {i+1} (New)")
                         
                         with copy_col:
-                            if CLIPBOARD_AVAILABLE:
-                                if st.button(f"📋 Copy", key=f"copy_btn_{i}", help=f"Copy caption {i+1} to clipboard"):
-                                    try:
-                                        pyperclip.copy(caption.strip())
-                                        st.success("✅ Copied!")
-                                    except Exception as e:
-                                        st.error("❌ Copy failed - use manual selection instead")
-                                        st.info("💡 **Manual Copy:** Select and copy the text from the caption box below")
-                            else:
-                                st.info("💡 **Manual Copy:** Select and copy the text from the caption box below")
+                            # Use improved copy function
+                            if st.button(f"📋 Copy", key=f"copy_btn_{i}", help=f"Copy caption {i+1} to clipboard"):
+                                safe_copy_to_clipboard(
+                                    caption.strip(), 
+                                    success_message="✅ Caption copied!",
+                                    fallback_message="💡 **Manual Copy:**"
+                                )
+                            
+                            # Show manual copy tip if clipboard not available
+                            if not CLIPBOARD_AVAILABLE:
+                                st.info("💡 **Manual Copy:** Select text in the caption box below and copy with Ctrl+C")
                         
                         with mark_used_col:
                             # Check if caption is already marked as used
@@ -3554,12 +3569,7 @@ def main():
                             # Copy button
                             if CLIPBOARD_AVAILABLE:
                                 if st.button("📋", key=f"copy_history_{result['hash']}", help="Copy caption"):
-                                    try:
-                                        import pyperclip
-                                        pyperclip.copy(result['text'])
-                                        st.success("Copied!")
-                                    except Exception as e:
-                                        st.error("Copy failed - please select text manually and copy with Ctrl+C")
+                                    safe_copy_to_clipboard(result['text'], success_message="Copied!", fallback_message="💡 Manual copy:")
                             
                             # Unmark button
                             if st.button("🔄", key=f"unmark_history_{result['hash']}", help="Remove from history"):
@@ -3590,12 +3600,11 @@ def main():
                                 combined_text = "\n\n---\n\n".join([
                                     r['text'] for r in results if r['hash'] in selected_captions
                                 ])
-                                try:
-                                    import pyperclip
-                                    pyperclip.copy(combined_text)
-                                    st.success(f"Copied {len(selected_captions)} captions!")
-                                except Exception as e:
-                                    st.error("Copy failed - please select text manually and copy with Ctrl+C")
+                                safe_copy_to_clipboard(
+                                    combined_text,
+                                    success_message=f"Copied {len(selected_captions)} captions!",
+                                    fallback_message="💡 Manual copy:"
+                                )
                             else:
                                 st.error("Clipboard not available")
 
