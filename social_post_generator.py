@@ -30,6 +30,7 @@ except ImportError:
 
 # === Constants ===
 COMPANY_DATA_FILE = "company_profiles.json"
+USED_CAPTIONS_FILE = "used_captions.json"
 APP_PASSWORD = os.getenv("APP_PASSWORD", "adcellerant2025")  # Change this!
 
 # === Page Configuration ===
@@ -118,6 +119,110 @@ def show_logout_option():
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
+
+# === Caption Tracking System ===
+def load_used_captions():
+    """Load used captions from JSON file."""
+    try:
+        if os.path.exists(USED_CAPTIONS_FILE):
+            with open(USED_CAPTIONS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {}
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        return {}
+    except Exception as e:
+        st.error(f"Error loading used captions: {str(e)}")
+        return {}
+
+def save_used_captions(used_captions):
+    """Save used captions to JSON file."""
+    try:
+        with open(USED_CAPTIONS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(used_captions, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        st.error(f"Error saving used captions: {str(e)}")
+        return False
+
+def mark_caption_as_used(caption_text, business_name=""):
+    """Mark a caption as used."""
+    import hashlib
+    
+    # Create a hash of the caption for comparison
+    caption_hash = hashlib.md5(caption_text.strip().lower().encode()).hexdigest()
+    
+    used_captions = load_used_captions()
+    timestamp = datetime.now().isoformat()
+    
+    used_captions[caption_hash] = {
+        'text': caption_text.strip(),
+        'business': business_name,
+        'used_date': timestamp,
+        'usage_count': used_captions.get(caption_hash, {}).get('usage_count', 0) + 1
+    }
+    
+    save_used_captions(used_captions)
+
+def is_caption_duplicate(caption_text, threshold=0.8):
+    """Check if a caption is too similar to previously used captions."""
+    import hashlib
+    
+    caption_hash = hashlib.md5(caption_text.strip().lower().encode()).hexdigest()
+    used_captions = load_used_captions()
+    
+    # Exact match
+    if caption_hash in used_captions:
+        return True, used_captions[caption_hash]
+    
+    # Similarity check (basic word overlap)
+    new_words = set(caption_text.lower().split())
+    
+    for stored_hash, stored_data in used_captions.items():
+        stored_words = set(stored_data['text'].lower().split())
+        
+        if len(new_words) > 0 and len(stored_words) > 0:
+            overlap = len(new_words.intersection(stored_words))
+            similarity = overlap / max(len(new_words), len(stored_words))
+            
+            if similarity >= threshold:
+                return True, stored_data
+    
+    return False, None
+
+def get_caption_usage_stats():
+    """Get statistics about caption usage."""
+    used_captions = load_used_captions()
+    
+    stats = {
+        'total_used': len(used_captions),
+        'recent_used': 0,
+        'most_used_business': 'N/A'
+    }
+    
+    if used_captions:
+        # Count recent usage (last 7 days)
+        from datetime import timedelta
+        week_ago = datetime.now() - timedelta(days=7)
+        
+        recent_count = 0
+        business_counts = {}
+        
+        for caption_data in used_captions.values():
+            try:
+                used_date = datetime.fromisoformat(caption_data['used_date'])
+                if used_date >= week_ago:
+                    recent_count += 1
+                
+                business = caption_data.get('business', 'Unknown')
+                business_counts[business] = business_counts.get(business, 0) + 1
+            except:
+                continue
+        
+        stats['recent_used'] = recent_count
+        if business_counts:
+            stats['most_used_business'] = max(business_counts, key=business_counts.get)
+    
+    return stats
 
 # === Company Directory Management ===
 def load_company_profiles():
@@ -771,14 +876,51 @@ Caption 2: [caption without emojis/hashtags]
 Caption 3: [caption without emojis/hashtags]"""
 
 def _generate_with_openai(prompt, image_data, use_premium_model, text_only_mode):
-    """Generate captions using OpenAI API."""
+    """Generate captions using OpenAI API with duplicate checking."""
     model = "gpt-4o" if use_premium_model else "gpt-4o-mini"
     
+    max_attempts = 3
+    duplicate_found = False
+    
     with st.spinner(f"🤖 Generating {'text-only ' if text_only_mode else ''}captions using {model}..."):
-        if text_only_mode:
-            return _generate_text_only(prompt, model)
-        else:
-            return _generate_with_image(prompt, image_data, model)
+        for attempt in range(max_attempts):
+            if attempt > 0:
+                # Add variety instruction for retry attempts
+                enhanced_prompt = prompt + f"\n\n🔄 RETRY #{attempt + 1}: Create completely different, fresh captions that are unique and haven't been used before. Use different phrases, angles, and approaches."
+            else:
+                enhanced_prompt = prompt
+            
+            if text_only_mode:
+                result = _generate_text_only(enhanced_prompt, model)
+            else:
+                result = _generate_with_image(enhanced_prompt, image_data, model)
+            
+            # Check for duplicates in the generated captions
+            if result:
+                captions = result.split('\n\n')
+                duplicate_count = 0
+                
+                for caption in captions:
+                    if caption.strip():
+                        is_dup, _ = is_caption_duplicate(caption.strip())
+                        if is_dup:
+                            duplicate_count += 1
+                
+                # If less than half are duplicates, accept the result
+                if duplicate_count < len([c for c in captions if c.strip()]) / 2:
+                    if attempt > 0:
+                        st.info(f"✨ Generated fresh captions on attempt {attempt + 1}")
+                    return result
+                else:
+                    duplicate_found = True
+                    if attempt < max_attempts - 1:
+                        st.warning(f"🔄 Attempt {attempt + 1}: Some similar captions detected, generating alternatives...")
+            
+        # If we've tried multiple times and still have duplicates
+        if duplicate_found:
+            st.warning("⚠️ Some generated captions may be similar to previously used ones. Consider using different keywords or business descriptions for more variety.")
+        
+        return result
 
 def _generate_text_only(prompt, model):
     """Generate text-only captions."""
@@ -1032,6 +1174,30 @@ def create_advanced_sidebar():
             st.metric("Captions Generated", st.session_state.captions_generated)
         with col2:
             st.metric("Companies Saved", len(company_profiles))
+        
+        # Caption usage statistics
+        st.markdown("### 📝 Caption Usage Stats")
+        usage_stats = get_caption_usage_stats()
+        
+        usage_col1, usage_col2 = st.columns(2)
+        with usage_col1:
+            st.metric("Total Used", usage_stats['total_used'])
+        with usage_col2:
+            st.metric("This Week", usage_stats['recent_used'])
+        
+        if usage_stats['most_used_business'] != 'N/A':
+            st.caption(f"🏆 Most Active: {usage_stats['most_used_business']}")
+        
+        # Show option to clear used captions
+        if usage_stats['total_used'] > 0:
+            with st.expander("🗑️ Manage Used Captions"):
+                st.warning(f"You have {usage_stats['total_used']} captions marked as used")
+                if st.button("🔄 Clear All Used Captions", type="secondary"):
+                    if os.path.exists(USED_CAPTIONS_FILE):
+                        os.remove(USED_CAPTIONS_FILE)
+                        st.success("✅ Cleared all used caption records")
+                        st.rerun()
+                st.caption("⚠️ This will reset duplicate detection")
         
         # Quick business templates
         st.markdown("### 🏢 Business Templates")
@@ -1670,10 +1836,17 @@ def main():
             for i, caption in enumerate(captions):
                 if caption.strip():
                     with st.container():
-                        caption_header_col, copy_col = st.columns([4, 1])
+                        # Check if caption was previously used
+                        is_duplicate, duplicate_info = is_caption_duplicate(caption.strip())
+                        
+                        caption_header_col, copy_col, mark_used_col = st.columns([3, 1, 1])
                         
                         with caption_header_col:
-                            st.subheader(f"Caption {i+1}")
+                            if is_duplicate:
+                                st.subheader(f"⚠️ Caption {i+1} (Previously Used)")
+                                st.warning(f"🔄 Similar caption used on {duplicate_info['used_date'][:10]} for {duplicate_info.get('business', 'Unknown')}")
+                            else:
+                                st.subheader(f"✨ Caption {i+1} (New)")
                         
                         with copy_col:
                             if CLIPBOARD_AVAILABLE:
@@ -1681,8 +1854,23 @@ def main():
                                     pyperclip.copy(caption.strip())
                                     st.success("✅ Copied!")
                         
-                        # Caption with enhanced styling
-                        st.markdown(f"```\n{caption.strip()}\n```")
+                        with mark_used_col:
+                            if st.button(f"✅ Mark Used", key=f"mark_used_{i}", help=f"Mark caption {i+1} as used"):
+                                mark_caption_as_used(caption.strip(), business_input)
+                                st.success("📝 Marked as used!")
+                                st.rerun()
+                        
+                        # Caption with enhanced multi-line styling
+                        st.markdown("**Caption Text:**")
+                        # Use text_area for multi-line display with proper height
+                        st.text_area(
+                            label="",
+                            value=caption.strip(),
+                            height=120,
+                            key=f"caption_display_{i}",
+                            help="Caption text - automatically sized for readability",
+                            label_visibility="collapsed"
+                        )
                         
                         # Character count and social media suitability
                         char_count = len(caption.strip())
