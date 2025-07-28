@@ -257,6 +257,102 @@ def get_caption_usage_stats():
     
     return stats
 
+def search_used_captions(search_query="", business_filter="", date_filter=""):
+    """Search used captions with filters."""
+    used_captions = load_used_captions()
+    results = []
+    
+    for caption_hash, caption_data in used_captions.items():
+        caption_text = caption_data.get('text', '')
+        business = caption_data.get('business', '')
+        used_date = caption_data.get('used_date', '')
+        
+        # Apply filters
+        if search_query and search_query.lower() not in caption_text.lower():
+            continue
+            
+        if business_filter and business_filter.lower() not in business.lower():
+            continue
+            
+        if date_filter:
+            try:
+                caption_date = datetime.fromisoformat(used_date).date()
+                filter_date = datetime.fromisoformat(date_filter).date()
+                if caption_date != filter_date:
+                    continue
+            except:
+                continue
+        
+        results.append({
+            'hash': caption_hash,
+            'text': caption_text,
+            'business': business,
+            'used_date': used_date,
+            'usage_count': caption_data.get('usage_count', 1)
+        })
+    
+    # Sort by most recent first
+    results.sort(key=lambda x: x['used_date'], reverse=True)
+    return results
+
+def get_unique_businesses():
+    """Get list of unique businesses from used captions."""
+    used_captions = load_used_captions()
+    businesses = set()
+    
+    for caption_data in used_captions.values():
+        business = caption_data.get('business', '').strip()
+        if business:
+            businesses.add(business)
+    
+    return sorted(list(businesses))
+
+def delete_multiple_captions(caption_hashes):
+    """Delete multiple captions from usage history."""
+    if not caption_hashes:
+        return False
+        
+    used_captions = load_used_captions()
+    deleted_count = 0
+    
+    for caption_hash in caption_hashes:
+        if caption_hash in used_captions:
+            del used_captions[caption_hash]
+            deleted_count += 1
+    
+    if deleted_count > 0:
+        save_used_captions(used_captions)
+        return deleted_count
+    
+    return 0
+
+def export_caption_history():
+    """Export caption history to CSV format."""
+    used_captions = load_used_captions()
+    
+    if not used_captions:
+        return None
+    
+    import csv
+    import io
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write headers
+    writer.writerow(['Caption Text', 'Business', 'Used Date', 'Usage Count'])
+    
+    # Write data
+    for caption_data in used_captions.values():
+        writer.writerow([
+            caption_data.get('text', ''),
+            caption_data.get('business', ''),
+            caption_data.get('used_date', ''),
+            caption_data.get('usage_count', 1)
+        ])
+    
+    return output.getvalue()
+
 # === Company Directory Management ===
 def load_company_profiles():
     """Load saved company profiles from JSON file with error handling."""
@@ -1281,7 +1377,8 @@ def create_main_tabs():
         "🎨 Style Settings", 
         "🌐 Website Analysis", 
         "📱 Generated Captions", 
-        "🔄 Batch Processing"
+        "� Caption History",
+        "�🔄 Batch Processing"
     ])
 
 def handle_image_business_tab():
@@ -1598,7 +1695,7 @@ def main():
     show_logout_option()
     
     # Create main tabs
-    tab1, tab2, tab3, tab4, tab5 = create_main_tabs()
+    tab1, tab2, tab3, tab4, tab5, tab6 = create_main_tabs()
     
     # Tab 1: Image & Business
     with tab1:
@@ -2448,6 +2545,205 @@ def main():
                 • Monitor your OpenAI API usage during large batches
                 """)
     
+    # Tab 6: Caption History
+    with tab6:
+        st.header("📝 Caption History & Search")
+        st.markdown("Search, manage, and analyze your used captions")
+        
+        # Get current usage stats
+        usage_stats = get_caption_usage_stats()
+        
+        if usage_stats['total_used'] == 0:
+            st.info("📭 **No caption history yet**\n\nStart generating captions and marking them as used to build your history.")
+        else:
+            # Stats overview
+            st.markdown("### 📊 Quick Stats")
+            stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
+            
+            with stat_col1:
+                st.metric("Total Used", usage_stats['total_used'])
+            with stat_col2:
+                st.metric("This Week", usage_stats['recent_used'])
+            with stat_col3:
+                businesses = get_unique_businesses()
+                st.metric("Businesses", len(businesses))
+            with stat_col4:
+                st.metric("Most Active", usage_stats['most_used_business'])
+            
+            st.markdown("---")
+            
+            # Search and filter controls
+            st.markdown("### 🔍 Search & Filter")
+            
+            search_col1, search_col2, search_col3 = st.columns([2, 1, 1])
+            
+            with search_col1:
+                search_query = st.text_input(
+                    "Search captions",
+                    placeholder="Enter keywords to search...",
+                    help="Search within caption text"
+                )
+            
+            with search_col2:
+                businesses = get_unique_businesses()
+                business_filter = st.selectbox(
+                    "Filter by business",
+                    ["All businesses"] + businesses,
+                    help="Filter captions by business"
+                )
+                if business_filter == "All businesses":
+                    business_filter = ""
+            
+            with search_col3:
+                date_filter = st.date_input(
+                    "Filter by date",
+                    value=None,
+                    help="Filter captions by specific date"
+                )
+                date_filter_str = date_filter.isoformat() if date_filter else ""
+            
+            # Export and bulk actions
+            action_col1, action_col2, action_col3 = st.columns(3)
+            
+            with action_col1:
+                if st.button("📥 Export History", help="Download caption history as CSV"):
+                    csv_data = export_caption_history()
+                    if csv_data:
+                        st.download_button(
+                            label="💾 Download CSV",
+                            data=csv_data,
+                            file_name=f"caption_history_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                    else:
+                        st.error("No data to export")
+            
+            with action_col2:
+                if st.button("🗑️ Clear All History", help="Delete all used captions"):
+                    if st.session_state.get('confirm_clear_all'):
+                        # Clear the history
+                        used_captions = {}
+                        save_used_captions(used_captions)
+                        st.success("✅ All caption history cleared!")
+                        st.session_state.confirm_clear_all = False
+                        st.rerun()
+                    else:
+                        st.session_state.confirm_clear_all = True
+                        st.warning("⚠️ Click again to confirm deletion of ALL history")
+            
+            with action_col3:
+                if st.button("🔄 Refresh", help="Refresh the caption list"):
+                    st.rerun()
+            
+            # Search results
+            results = search_used_captions(search_query, business_filter, date_filter_str)
+            
+            if not results:
+                st.info("🔍 No captions found matching your criteria.")
+            else:
+                st.markdown(f"### 📋 Results ({len(results)} captions)")
+                
+                # Bulk selection
+                if len(results) > 1:
+                    select_all = st.checkbox("Select all captions", key="select_all_history")
+                    if select_all:
+                        selected_captions = [r['hash'] for r in results]
+                    else:
+                        selected_captions = []
+                else:
+                    selected_captions = []
+                
+                # Display results
+                for i, result in enumerate(results):
+                    with st.container():
+                        # Create columns for checkbox, caption info, and actions
+                        if len(results) > 1:
+                            check_col, content_col, action_col = st.columns([0.5, 8, 1.5])
+                        else:
+                            content_col, action_col = st.columns([8.5, 1.5])
+                            check_col = None
+                        
+                        # Checkbox for bulk operations
+                        if check_col:
+                            with check_col:
+                                is_selected = st.checkbox(
+                                    "",
+                                    value=result['hash'] in selected_captions,
+                                    key=f"select_{result['hash']}"
+                                )
+                                if is_selected and result['hash'] not in selected_captions:
+                                    selected_captions.append(result['hash'])
+                                elif not is_selected and result['hash'] in selected_captions:
+                                    selected_captions.remove(result['hash'])
+                        
+                        # Caption content
+                        with content_col:
+                            # Format date
+                            try:
+                                used_date = datetime.fromisoformat(result['used_date'])
+                                date_str = used_date.strftime('%Y-%m-%d %H:%M')
+                            except:
+                                date_str = result['used_date']
+                            
+                            # Header with metadata
+                            st.markdown(f"**Caption #{i+1}** | Business: {result['business'] or 'Unknown'} | Used: {date_str} | Count: {result['usage_count']}")
+                            
+                            # Caption text in expandable area
+                            with st.expander("📝 View Caption", expanded=False):
+                                st.text_area(
+                                    "",
+                                    value=result['text'],
+                                    height=100,
+                                    key=f"history_caption_{result['hash']}",
+                                    help="Caption text - click to expand",
+                                    label_visibility="collapsed"
+                                )
+                        
+                        # Action buttons
+                        with action_col:
+                            # Copy button
+                            if CLIPBOARD_AVAILABLE:
+                                if st.button("📋", key=f"copy_history_{result['hash']}", help="Copy caption"):
+                                    import pyperclip
+                                    pyperclip.copy(result['text'])
+                                    st.success("Copied!")
+                            
+                            # Unmark button
+                            if st.button("🔄", key=f"unmark_history_{result['hash']}", help="Remove from history"):
+                                if unmark_caption_as_used(result['text']):
+                                    st.success("Removed!")
+                                    st.rerun()
+                        
+                        st.markdown("---")
+                
+                # Bulk actions
+                if selected_captions:
+                    st.markdown(f"### 🔧 Bulk Actions ({len(selected_captions)} selected)")
+                    
+                    bulk_col1, bulk_col2 = st.columns(2)
+                    
+                    with bulk_col1:
+                        if st.button("🗑️ Delete Selected", type="secondary"):
+                            deleted_count = delete_multiple_captions(selected_captions)
+                            if deleted_count > 0:
+                                st.success(f"✅ Deleted {deleted_count} captions!")
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete captions")
+                    
+                    with bulk_col2:
+                        if st.button("📋 Copy All Selected"):
+                            if CLIPBOARD_AVAILABLE:
+                                combined_text = "\n\n---\n\n".join([
+                                    r['text'] for r in results if r['hash'] in selected_captions
+                                ])
+                                import pyperclip
+                                pyperclip.copy(combined_text)
+                                st.success(f"Copied {len(selected_captions)} captions!")
+                            else:
+                                st.error("Clipboard not available")
+
     # Footer with enhanced examples and tips
     st.markdown("---")
     st.header("💡 Success Examples & Tips")
