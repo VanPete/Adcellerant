@@ -180,6 +180,22 @@ def mark_caption_as_used(caption_text, business_name=""):
     
     save_used_captions(used_captions)
 
+def unmark_caption_as_used(caption_text):
+    """Remove a caption from the used captions history."""
+    import hashlib
+    
+    # Create a hash of the caption for comparison
+    caption_hash = hashlib.md5(caption_text.strip().lower().encode()).hexdigest()
+    
+    used_captions = load_used_captions()
+    
+    if caption_hash in used_captions:
+        del used_captions[caption_hash]
+        save_used_captions(used_captions)
+        return True
+    
+    return False
+
 def is_caption_duplicate(caption_text, threshold=0.8):
     """Check if a caption is too similar to previously used captions."""
     import hashlib
@@ -1939,10 +1955,23 @@ def main():
                                     st.success("✅ Copied!")
                         
                         with mark_used_col:
-                            if st.button(f"✅ Mark Used", key=f"mark_used_{i}", help=f"Mark caption {i+1} as used"):
-                                mark_caption_as_used(caption.strip(), business_input)
-                                st.success("📝 Marked as used!")
-                                st.rerun()
+                            # Check if caption is already marked as used
+                            is_currently_used = is_caption_duplicate(caption.strip())[0]
+                            
+                            if is_currently_used:
+                                # Show "Unmark" button if already used
+                                if st.button(f"🔄 Unmark", key=f"unmark_used_{i}", help=f"Remove caption {i+1} from usage history"):
+                                    if unmark_caption_as_used(caption.strip()):
+                                        st.success("✅ Removed from usage history!")
+                                    else:
+                                        st.error("❌ Failed to remove from history")
+                                    st.rerun()
+                            else:
+                                # Show "Mark Used" button if not used
+                                if st.button(f"✅ Mark Used", key=f"mark_used_{i}", help=f"Mark caption {i+1} as used"):
+                                    mark_caption_as_used(caption.strip(), business_input)
+                                    st.success("📝 Marked as used!")
+                                    st.rerun()
                         
                         # Caption with enhanced multi-line styling
                         st.markdown("**Caption Text:**")
