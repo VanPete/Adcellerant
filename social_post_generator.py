@@ -7,6 +7,7 @@ AI-Powered Social Media Caption Generator with Advanced Website Analysis
 # Standard library imports
 import os
 import base64
+import hashlib
 import io
 import json
 import zipfile
@@ -15,6 +16,7 @@ from datetime import datetime
 # Third-party imports
 import requests
 import streamlit as st
+import streamlit.components.v1
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -39,6 +41,9 @@ try:
         IMAGE_CLIPBOARD_AVAILABLE = False
 except ImportError:
     IMAGE_CLIPBOARD_AVAILABLE = False
+
+# Web clipboard support (always available in browsers)
+WEB_CLIPBOARD_AVAILABLE = True
 
 # === Constants ===
 COMPANY_DATA_FILE = "company_profiles.json"
@@ -1333,10 +1338,14 @@ def _handle_image_selection():
     # Build options list based on available functionality
     image_options = ["📁 Upload File"]
     
+    # Add clipboard options based on environment
     if IMAGE_CLIPBOARD_AVAILABLE:
-        image_options.append("📋 Paste from Clipboard")
+        image_options.append("📋 Paste from System Clipboard")
     
-    image_options.extend(["🌐 Use Website Image", "📝 Text-Only (No Image)"])
+    if WEB_CLIPBOARD_AVAILABLE:
+        image_options.append("🌐 Paste from Web Clipboard")
+    
+    image_options.extend(["🔗 Use Website Image", "📝 Text-Only (No Image)"])
     
     image_option = st.radio(
         "Content Creation Mode:",
@@ -1353,9 +1362,11 @@ def _handle_image_selection():
         _display_text_only_info()
     elif image_option == "📁 Upload File":
         image = _handle_file_upload()
-    elif image_option == "📋 Paste from Clipboard":
+    elif image_option == "📋 Paste from System Clipboard":
         image = _handle_clipboard_paste()
-    elif image_option == "🌐 Use Website Image":
+    elif image_option == "🌐 Paste from Web Clipboard":
+        image = _handle_web_clipboard_paste()
+    elif image_option == "🔗 Use Website Image":
         st.info("📝 Enter a website URL in the 'Website Analysis' tab to see available images.")
     
     return image, text_only_mode
@@ -1401,7 +1412,7 @@ def _display_image_preview(image, uploaded_file):
         st.write(f"💾 Size: {file_size:.1f} KB")
 
 def _handle_clipboard_paste():
-    """Handle clipboard paste functionality."""
+    """Handle system clipboard paste functionality."""
     if IMAGE_CLIPBOARD_AVAILABLE:
         col_btn, col_status = st.columns([1, 1])
         with col_btn:
@@ -1423,12 +1434,56 @@ def _handle_clipboard_paste():
         with col_status:
             st.info("💡 **How to paste:**\n1. Copy image (Ctrl+C)\n2. Click 'Paste Image' button")
     else:
-        st.warning("⚠️ **Clipboard paste not available in cloud environment.**")
-        st.info("💡 **Alternative options:**")
-        st.info("• Use '📁 Upload File' to select an image")
-        st.info("• Use '🌐 Use Website Image' to grab from a website")
-        st.info("• Use '📝 Text-Only' for captions without images")
-        st.info("📝 Note: Clipboard paste works when running locally on Windows/Mac")
+        st.warning("⚠️ **System clipboard not available in cloud environment.**")
+        st.info("💡 **Try 'Web Clipboard' option instead**")
+    
+    return None
+
+def _handle_web_clipboard_paste():
+    """Handle web-based clipboard paste functionality."""
+    st.info("🌐 **Web Clipboard Alternative**")
+    st.markdown("Since direct clipboard access isn't available in web browsers, here are the best alternatives:")
+    
+    # Create columns for different methods
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 📸 **Method 1: Screenshot & Upload**")
+        st.markdown("""
+        1. **Take screenshot** (Windows: Win+Shift+S, Mac: Cmd+Shift+4)
+        2. **Save image** to your computer  
+        3. **Use Upload File** option above
+        """)
+        
+        if st.button("📁 Switch to Upload File", type="primary"):
+            st.session_state.clipboard_redirect = True
+            st.rerun()
+    
+    with col2:
+        st.markdown("### 🖱️ **Method 2: Drag & Drop**")
+        st.markdown("""
+        1. **Copy/screenshot** your image
+        2. **Save to desktop** or downloads
+        3. **Drag the file** into the upload area above
+        """)
+        
+        st.info("💡 **Pro Tip:** Most modern browsers support dragging images directly into file upload areas!")
+    
+    # Advanced users section
+    with st.expander("🔧 **For Advanced Users**"):
+        st.markdown("""
+        **Browser Extensions:**
+        • Install clipboard manager extensions
+        • Use screenshot tools with direct upload
+        • Browser developer tools for base64 conversion
+        
+        **Alternative Tools:**
+        • Lightshot, Greenshot, or similar screenshot tools
+        • Online image converters
+        • Cloud storage integration (Google Drive, Dropbox)
+        """)
+    
+    st.warning("💡 **Note:** Web browsers restrict direct clipboard access for security. The upload method is the most reliable for web applications.")
     
     return None
 
