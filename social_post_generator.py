@@ -2,62 +2,43 @@
 """
 Adcellerant Social Caption Generator
 AI-Powered Social Media Caption Generator with Advanced Website Analysis
+
+Author: Adcellerant Team
+Version: 2.0
+Last Updated: January 2025
 """
 
 # Standard library imports
-import os
 import base64
 import csv
 import hashlib
 import io
 import json
+import os
 import zipfile
 from datetime import datetime, timedelta
 
 # Third-party imports
 import requests
 import streamlit as st
-import streamlit.components.v1
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from openai import OpenAI
 from PIL import Image
 from urllib.parse import urljoin, urlparse
 
-# Optional imports
-try:
-    import pyperclip
-    CLIPBOARD_AVAILABLE = True
-except ImportError:
-    CLIPBOARD_AVAILABLE = False
-
-# Check for image clipboard support
-try:
-    from PIL import ImageGrab
-    # Test if clipboard functionality works
-    try:
-        ImageGrab.grabclipboard()
-        IMAGE_CLIPBOARD_AVAILABLE = True
-    except:
-        IMAGE_CLIPBOARD_AVAILABLE = False
-except ImportError:
-    IMAGE_CLIPBOARD_AVAILABLE = False
-
-# Web clipboard support (always available in browsers)
-WEB_CLIPBOARD_AVAILABLE = True
-
 # === Constants ===
+# Data file configurations
 COMPANY_DATA_FILE = "company_profiles.json"
-USED_CAPTIONS_FILE = "used_captions.json"
+USED_CAPTIONS_FILE = "used_captions.json" 
 FEEDBACK_FILE = "user_feedback.json"
 STATS_FILE = "app_statistics.json"
-APP_PASSWORD = os.getenv("APP_PASSWORD", "adcellerant2025")  # Change this!
 
-# === Utility Functions ===
-def safe_copy_to_clipboard(text, success_message="✅ Copied!", fallback_message="💡 **Manual Copy:**"):
-    """Copy functionality disabled for cleaner UI."""
-    # Copy functionality removed - users can copy directly from text areas
-    return False
+# Security configuration  
+APP_PASSWORD = os.getenv("APP_PASSWORD", "adcellerant2025")
+
+# Feature flags - clipboard functionality removed for cleaner UI
+CLIPBOARD_FEATURES_ENABLED = False
 
 # === Page Configuration ===
 st.set_page_config(
@@ -154,10 +135,10 @@ def load_used_captions():
             with open(USED_CAPTIONS_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
         return {}
-    except (json.JSONDecodeError, FileNotFoundError) as e:
+    except (json.JSONDecodeError, FileNotFoundError):
         return {}
-    except Exception as e:
-        st.error(f"Error loading used captions: {str(e)}")
+    except (PermissionError, OSError) as e:
+        st.error(f"File access error loading used captions: {str(e)}")
         return {}
 
 def save_used_captions(used_captions):
@@ -166,8 +147,11 @@ def save_used_captions(used_captions):
         with open(USED_CAPTIONS_FILE, 'w', encoding='utf-8') as f:
             json.dump(used_captions, f, indent=2, ensure_ascii=False)
         return True
-    except Exception as e:
-        st.error(f"Error saving used captions: {str(e)}")
+    except (PermissionError, OSError) as e:
+        st.error(f"File access error saving used captions: {str(e)}")
+        return False
+    except (TypeError, ValueError) as e:
+        st.error(f"Data serialization error: {str(e)}")
         return False
 
 def mark_caption_as_used(caption_text, business_name=""):
@@ -532,8 +516,8 @@ def load_company_profiles():
     except (json.JSONDecodeError, FileNotFoundError) as e:
         st.error(f"Error loading company profiles: {str(e)}")
         return {}
-    except Exception as e:
-        st.error(f"Unexpected error loading profiles: {str(e)}")
+    except (PermissionError, OSError) as e:
+        st.error(f"File access error loading company profiles: {str(e)}")
         return {}
 
 def save_company_profiles(profiles):
@@ -585,6 +569,31 @@ def delete_company_profile(company_name):
         del profiles[company_name]
         return save_company_profiles(profiles)
     return False
+
+def create_profile_data_from_settings(settings):
+    """Create standardized profile data dictionary from current settings.
+    
+    Args:
+        settings (dict): Current session settings dictionary
+        
+    Returns:
+        dict: Standardized profile data with all required fields
+    """
+    return {
+        'business_input': settings.get('business_input', ''),
+        'website_url': settings.get('website_url', ''),
+        'caption_style': settings.get('caption_style', 'Professional'),
+        'caption_length': settings.get('caption_length', 'Medium (4-6 sentences)'),
+        'use_premium_model': settings.get('use_premium_model', False),
+        'include_cta': settings.get('include_cta', True),
+        'focus_keywords': settings.get('focus_keywords', ''),
+        'avoid_words': settings.get('avoid_words', ''),
+        'target_audience': settings.get('target_audience', 'General'),
+        'text_only_mode': settings.get('text_only_mode', False),
+        'character_limit_preference': settings.get('character_limit_preference', 'No limit'),
+        'captions_generated_count': 1,
+        'website_analysis': st.session_state.get('website_analysis')
+    }
 
 def clear_all_session_data():
     """Clear all session state data for starting over."""
@@ -1322,6 +1331,61 @@ def show_progress_indicator(step, total_steps, step_name):
     st.progress(progress)
     st.caption(f"Step {step}/{total_steps}: {step_name}")
 
+# === Reusable UI Components ===
+def create_header_with_close_button(title, close_key):
+    """Create a standard header with title and close button layout.
+    
+    Args:
+        title (str): The header title text
+        close_key (str): Session state key to set when close button is clicked
+        
+    Returns:
+        tuple: (title_column, close_column) for further customization
+    """
+    col_title, col_close = st.columns([4, 1])
+    
+    with col_title:
+        st.markdown(f"### {title}")
+    
+    with col_close:
+        if st.button("❌", key=f"close_{close_key}", help="Close"):
+            st.session_state[close_key] = False
+            st.rerun()
+    
+    return col_title, col_close
+
+def create_caption_action_layout():
+    """Create standard caption display layout with header and action columns.
+    
+    Returns:
+        tuple: (header_column, action_column) for caption display
+    """
+    return st.columns([4, 1])
+
+def create_bulk_action_layout():
+    """Create standard bulk action button layout.
+    
+    Returns:
+        tuple: (action_col1, action_col2) for bulk operations
+    """
+    return st.columns(2)
+
+def create_download_action_layout():
+    """Create standard download section with 4 equal columns.
+    
+    Returns:
+        tuple: (col1, col2, col3, col4) for download options
+    """
+    return st.columns(4)
+
+def create_config_display_layout():
+    """Create standard configuration display with 2 equal columns.
+    
+    Returns:
+        tuple: (config_col1, config_col2) for settings display
+    """
+    return st.columns(2)
+
 def create_business_profile_template():
     """Create predefined business profile templates."""
     templates = {
@@ -1727,14 +1791,8 @@ def show_documentation_popup():
     if st.session_state.get('show_documentation'):
         st.markdown("---")
         
-        # Header with close button
-        col_doc_title, col_close = st.columns([4, 1])
-        with col_doc_title:
-            st.markdown("## 📖 Complete Feature Documentation")
-        with col_close:
-            if st.button("✖️ Close", type="secondary"):
-                st.session_state.show_documentation = False
-                st.rerun()
+        # Header with close button using reusable component
+        create_header_with_close_button("📖 Complete Feature Documentation", "show_documentation")
         
         # Create tabs for different documentation sections
         doc_tab1, doc_tab2, doc_tab3, doc_tab4 = st.tabs([
@@ -1893,14 +1951,8 @@ def show_feedback_popup():
     if st.session_state.get('show_feedback'):
         st.markdown("---")
         
-        # Header with close button
-        col_feedback_title, col_close = st.columns([4, 1])
-        with col_feedback_title:
-            st.markdown("## 💬 User Feedback & Support")
-        with col_close:
-            if st.button("✖️ Close", type="secondary", key="close_feedback"):
-                st.session_state.show_feedback = False
-                st.rerun()
+        # Header with close button using reusable component
+        create_header_with_close_button("💬 User Feedback & Support", "show_feedback")
         
         st.markdown("""
         **Help us improve!** Your feedback is valuable for making this tool better.
@@ -2155,16 +2207,7 @@ def _handle_image_selection():
                 st.rerun()
     
     # Build options list based on available functionality
-    image_options = ["📁 Upload File"]
-    
-    # Add clipboard options based on environment
-    if IMAGE_CLIPBOARD_AVAILABLE:
-        image_options.append("📋 Paste from System Clipboard")
-    
-    if WEB_CLIPBOARD_AVAILABLE:
-        image_options.append("🌐 Paste from Web Clipboard")
-    
-    image_options.extend(["🔗 Use Website Image", "📝 Text-Only (No Image)"])
+    image_options = ["📁 Upload File", " Use Website Image", "📝 Text-Only (No Image)"]
     
     # Get current selection and detect changes
     current_selection = st.session_state.get('image_selection_mode', image_options[0])
@@ -2192,11 +2235,7 @@ def _handle_image_selection():
         _display_text_only_info()
     elif image_option == "📁 Upload File":
         image = _handle_file_upload()
-    elif image_option == "📋 Paste from System Clipboard":
-        image = _handle_clipboard_paste()
-    elif image_option == "🌐 Paste from Web Clipboard":
-        image = _handle_web_clipboard_paste()
-    elif image_option == "🔗 Use Website Image":
+    elif image_option == " Use Website Image":
         image = _handle_website_image_selection()
     
     return image, text_only_mode
@@ -2333,87 +2372,6 @@ def _display_image_preview(image, uploaded_file):
             st.write(f"💾 Size: {file_size:.1f} KB")
         else:
             st.write("💾 Size: Already loaded")
-
-def _handle_clipboard_paste():
-    """Handle system clipboard paste functionality."""
-    if IMAGE_CLIPBOARD_AVAILABLE:
-        col_btn, col_status = st.columns([1, 1])
-        with col_btn:
-            if st.button("📋 Paste Image", help="Click after copying an image (Ctrl+C)", type="primary", key="clipboard_paste_btn"):
-                try:
-                    from PIL import ImageGrab
-                    clipboard_image = ImageGrab.grabclipboard()
-                    
-                    if clipboard_image:
-                        st.session_state.current_image = clipboard_image
-                        st.session_state.clipboard_image = True
-                        st.success("✅ Image successfully pasted!")
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ No image found in clipboard.")
-                except Exception as e:
-                    st.error(f"❌ Clipboard error: {str(e)}")
-        
-        with col_status:
-            st.info("💡 **How to paste:**\n1. Copy image (Ctrl+C)\n2. Click 'Paste Image' button")
-        
-        # Show current clipboard image if available
-        if st.session_state.get('current_image') and st.session_state.get('clipboard_image'):
-            st.image(st.session_state.current_image, caption="Image from clipboard", use_container_width=True)
-            return st.session_state.current_image
-    else:
-        st.warning("⚠️ **System clipboard not available in cloud environment.**")
-        st.info("💡 **Try 'Web Clipboard' option instead**")
-    
-    return None
-
-def _handle_web_clipboard_paste():
-    """Handle web-based clipboard paste functionality."""
-    st.info("🌐 **Web Clipboard Alternative**")
-    st.markdown("Since direct clipboard access isn't available in web browsers, here are the best alternatives:")
-    
-    # Create columns for different methods
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### 📸 **Method 1: Screenshot & Upload**")
-        st.markdown("""
-        1. **Take screenshot** (Windows: Win+Shift+S, Mac: Cmd+Shift+4)
-        2. **Save image** to your computer  
-        3. **Use Upload File** option above
-        """)
-        
-        if st.button("📁 Switch to Upload File", type="primary"):
-            st.session_state.clipboard_redirect = True
-            st.rerun()
-    
-    with col2:
-        st.markdown("### 🖱️ **Method 2: Drag & Drop**")
-        st.markdown("""
-        1. **Copy/screenshot** your image
-        2. **Save to desktop** or downloads
-        3. **Drag the file** into the upload area above
-        """)
-        
-        st.info("💡 **Pro Tip:** Most modern browsers support dragging images directly into file upload areas!")
-    
-    # Advanced users section
-    with st.expander("🔧 **For Advanced Users**"):
-        st.markdown("""
-        **Browser Extensions:**
-        • Install clipboard manager extensions
-        • Use screenshot tools with direct upload
-        • Browser developer tools for base64 conversion
-        
-        **Alternative Tools:**
-        • Lightshot, Greenshot, or similar screenshot tools
-        • Online image converters
-        • Cloud storage integration (Google Drive, Dropbox)
-        """)
-    
-    st.warning("💡 **Note:** Web browsers restrict direct clipboard access for security. The upload method is the most reliable for web applications.")
-    
-    return None
 
 def _handle_business_information():
     """Handle business information input."""
@@ -2880,7 +2838,7 @@ def main():
                         # Check if caption was previously used
                         is_duplicate, duplicate_info = is_caption_duplicate(caption.strip())
                         
-                        caption_header_col, mark_used_col = st.columns([4, 1])
+                        caption_header_col, mark_used_col = create_caption_action_layout()
                         
                         with caption_header_col:
                             if is_duplicate:
@@ -2888,27 +2846,6 @@ def main():
                                 st.warning(f"🔄 Similar caption used on {duplicate_info['used_date'][:10]} for {duplicate_info.get('business', 'Unknown')}")
                             else:
                                 st.subheader(f"✨ Caption {i+1} (New)")
-                        
-                        # with copy_col:
-                        #     # Copy functionality removed for cleaner UI
-                        #     pass
-                            # Copy button removed for cleaner UI
-                            # if st.button(f"📋", key=f"copy_btn_{i}", help=f"Copy caption {i+1} to clipboard", type="secondary"):
-                            #     success = safe_copy_to_clipboard(
-                            #         caption.strip(), 
-                            #         success_message="✅ Caption copied!",
-                            #         fallback_message="💡 **Manual Copy:**"
-                            #     )
-                            #     # If copy failed, also show a tip about the text area below
-                            #     if not success:
-                            #         st.info("� **Alternative:** You can also copy from the text box below")
-                            
-                            # Description for the copy icon
-                            st.caption("Copy to Clipboard")
-                            
-                            # Show manual copy tip if clipboard not available
-                            if not CLIPBOARD_AVAILABLE:
-                                st.caption("💡 Manual: Select text below and Ctrl+C")
                         
                         with mark_used_col:
                             # Check if caption is already marked as used
@@ -2960,7 +2897,7 @@ def main():
             # Download section with enhanced options and save company option
             st.subheader("💾 Download & Save Options")
             
-            download_col1, download_col2, download_col3, save_col = st.columns(4)
+            download_col1, download_col2, download_col3, save_col = create_download_action_layout()
             
             with download_col1:
                 st.download_button(
@@ -3018,21 +2955,7 @@ def main():
                         settings = st.session_state.current_settings
                         
                         # Create profile data
-                        profile_data = {
-                            'business_input': settings.get('business_input', ''),
-                            'website_url': settings.get('website_url', ''),
-                            'caption_style': settings.get('caption_style', 'Professional'),
-                            'caption_length': settings.get('caption_length', 'Medium (4-6 sentences)'),
-                            'use_premium_model': settings.get('use_premium_model', False),
-                            'include_cta': settings.get('include_cta', True),
-                            'focus_keywords': settings.get('focus_keywords', ''),
-                            'avoid_words': settings.get('avoid_words', ''),
-                            'target_audience': settings.get('target_audience', 'General'),
-                            'text_only_mode': settings.get('text_only_mode', False),
-                            'character_limit_preference': settings.get('character_limit_preference', 'No limit'),
-                            'captions_generated_count': 1,
-                            'website_analysis': st.session_state.get('website_analysis')
-                        }
+                        profile_data = create_profile_data_from_settings(settings)
                         
                         # Check if we're in editing mode
                         if st.session_state.get('editing_company'):
@@ -3065,21 +2988,7 @@ def main():
                             if st.button("✅ Confirm Overwrite", type="primary"):
                                 if st.session_state.get('current_settings'):
                                     settings = st.session_state.current_settings
-                                    profile_data = {
-                                        'business_input': settings.get('business_input', ''),
-                                        'website_url': settings.get('website_url', ''),
-                                        'caption_style': settings.get('caption_style', 'Professional'),
-                                        'caption_length': settings.get('caption_length', 'Medium (4-6 sentences)'),
-                                        'use_premium_model': settings.get('use_premium_model', False),
-                                        'include_cta': settings.get('include_cta', True),
-                                        'focus_keywords': settings.get('focus_keywords', ''),
-                                        'avoid_words': settings.get('avoid_words', ''),
-                                        'target_audience': settings.get('target_audience', 'General'),
-                                        'text_only_mode': settings.get('text_only_mode', False),
-                                        'character_limit_preference': settings.get('character_limit_preference', 'No limit'),
-                                        'captions_generated_count': 1,
-                                        'website_analysis': st.session_state.get('website_analysis')
-                                    }
+                                    profile_data = create_profile_data_from_settings(settings)
                                     
                                     if save_company_profile(original_name, profile_data):
                                         st.success(f"✅ Updated company profile: {original_name}")
@@ -3101,21 +3010,7 @@ def main():
                             if new_company_name and st.button("✅ Save as New", type="primary"):
                                 if st.session_state.get('current_settings'):
                                     settings = st.session_state.current_settings
-                                    profile_data = {
-                                        'business_input': settings.get('business_input', ''),
-                                        'website_url': settings.get('website_url', ''),
-                                        'caption_style': settings.get('caption_style', 'Professional'),
-                                        'caption_length': settings.get('caption_length', 'Medium (4-6 sentences)'),
-                                        'use_premium_model': settings.get('use_premium_model', False),
-                                        'include_cta': settings.get('include_cta', True),
-                                        'focus_keywords': settings.get('focus_keywords', ''),
-                                        'avoid_words': settings.get('avoid_words', ''),
-                                        'target_audience': settings.get('target_audience', 'General'),
-                                        'text_only_mode': settings.get('text_only_mode', False),
-                                        'character_limit_preference': settings.get('character_limit_preference', 'No limit'),
-                                        'captions_generated_count': 1,
-                                        'website_analysis': st.session_state.get('website_analysis')
-                                    }
+                                    profile_data = create_profile_data_from_settings(settings)
                                     
                                     if save_company_profile(new_company_name, profile_data):
                                         st.success(f"✅ Saved new company profile: {new_company_name}")
@@ -3596,18 +3491,8 @@ def main():
                                 st.error("Failed to delete captions")
                     
                     with bulk_col2:
-                        if st.button("📋 Copy All Selected"):
-                            if CLIPBOARD_AVAILABLE:
-                                combined_text = "\n\n---\n\n".join([
-                                    r['text'] for r in results if r['hash'] in selected_captions
-                                ])
-                                safe_copy_to_clipboard(
-                                    combined_text,
-                                    success_message=f"Copied {len(selected_captions)} captions!",
-                                    fallback_message="💡 Manual copy:"
-                                )
-                            else:
-                                st.error("Clipboard not available")
+                        # Copy functionality removed for cleaner UI  
+                        st.info("💡 Select text from captions below and use Ctrl+C to copy")
 
     # Footer with enhanced examples and tips
     st.markdown("---")
