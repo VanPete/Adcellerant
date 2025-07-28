@@ -1002,7 +1002,8 @@ def _has_suitable_dimensions(img):
 # === Caption Generation Functions ===
 def generate_captions(image_data, business_input, website_url, use_premium_model=False, 
                      caption_style="Professional", include_cta=True, 
-                     caption_length="Medium (4-6 sentences)", text_only_mode=False):
+                     caption_length="Medium (4-6 sentences)", text_only_mode=False,
+                     character_limit_preference="No limit"):
     """Main function to generate social media captions."""
     try:
         # Analyze website if URL provided
@@ -1011,7 +1012,7 @@ def generate_captions(image_data, business_input, website_url, use_premium_model
         # Create prompt based on available information
         prompt = _create_caption_prompt(
             website_info, business_input, caption_style, 
-            caption_length, include_cta, text_only_mode
+            caption_length, include_cta, text_only_mode, character_limit_preference
         )
         
         # Generate captions using OpenAI
@@ -1035,7 +1036,7 @@ def _get_website_info(website_url):
     return None
 
 def _create_caption_prompt(website_info, business_input, caption_style, 
-                          caption_length, include_cta, text_only_mode):
+                          caption_length, include_cta, text_only_mode, character_limit_preference="No limit"):
     """Create the prompt for caption generation based on available information."""
     # Style and length mappings
     style_instructions = _get_style_instructions()
@@ -1047,12 +1048,12 @@ def _create_caption_prompt(website_info, business_input, caption_style,
         return _create_enhanced_prompt(
             website_info, business_input, style_instructions, 
             length_map, caption_style, caption_length, 
-            cta_instruction, text_only_mode
+            cta_instruction, text_only_mode, character_limit_preference
         )
     else:
         return _create_basic_prompt(
             business_input, style_instructions, length_map, 
-            caption_style, caption_length, cta_instruction, text_only_mode
+            caption_style, caption_length, cta_instruction, text_only_mode, character_limit_preference
         )
 
 def _get_style_instructions():
@@ -1078,20 +1079,38 @@ def _get_cta_instruction(include_cta):
     return ("Include a subtle call-to-action that encourages engagement." 
             if include_cta else "Focus on storytelling without direct calls-to-action.")
 
+def _get_character_limit_instruction(character_limit_preference):
+    """Get character limit instruction for prompt."""
+    if character_limit_preference == "No limit":
+        return "Ready for Instagram, Facebook, or LinkedIn"
+    
+    char_limits = {
+        "Facebook (≤500 chars)": "- IMPORTANT: Each caption must be 500 characters or less for Facebook optimization",
+        "Instagram (≤400 chars)": "- IMPORTANT: Each caption must be 400 characters or less for Instagram optimization", 
+        "LinkedIn (≤700 chars)": "- IMPORTANT: Each caption must be 700 characters or less for LinkedIn optimization",
+        "Twitter/X (≤280 chars)": "- IMPORTANT: Each caption must be 280 characters or less for Twitter/X compatibility",
+        "All platforms (≤280 chars)": "- IMPORTANT: Each caption must be 280 characters or less for universal platform compatibility"
+    }
+    
+    return char_limits.get(character_limit_preference, "Ready for Instagram, Facebook, or LinkedIn")
+
 def _create_enhanced_prompt(website_info, business_input, style_instructions, 
                            length_map, caption_style, caption_length, 
-                           cta_instruction, text_only_mode):
+                           cta_instruction, text_only_mode, character_limit_preference="No limit"):
     """Create enhanced prompt using website information."""
     company_name = website_info.get('title', business_input).split('|')[0].strip()
     company_description = website_info.get('description', '')
     services = ', '.join(website_info.get('services', [])[:3])
     about_text = website_info.get('about_text', '')
     
+    # Get character limit instruction
+    char_limit_instruction = _get_character_limit_instruction(character_limit_preference)
+    
     base_requirements = f"""Requirements:
 - Each caption should be exactly {length_map[caption_length]} long
 - NO emojis or hashtags
 - Style: {style_instructions[caption_style]}
-- Make them ready to post on Instagram, Facebook, or LinkedIn
+- {char_limit_instruction}
 - {cta_instruction}
 - Focus on connecting with the audience through authentic storytelling"""
     
@@ -1132,16 +1151,19 @@ Format as 3 separate captions, each on its own paragraph:
 [Third caption without emojis/hashtags]"""
 
 def _create_basic_prompt(business_input, style_instructions, length_map, 
-                        caption_style, caption_length, cta_instruction, text_only_mode):
+                        caption_style, caption_length, cta_instruction, text_only_mode, character_limit_preference="No limit"):
     """Create basic prompt without website information."""
     business_type = business_input if business_input.strip() else "business"
+    
+    # Get character limit instruction
+    char_limit_instruction = _get_character_limit_instruction(character_limit_preference)
     
     base_requirements = f"""Requirements:
 - Each caption should be exactly {length_map[caption_length]} long
 - NO emojis or hashtags
 - Style: {style_instructions[caption_style]}
 - Include storytelling elements that connect with the audience
-- Ready for Instagram, Facebook, or LinkedIn
+- {char_limit_instruction}
 - {cta_instruction}"""
     
     if text_only_mode:
@@ -2586,6 +2608,33 @@ def main():
                 help="Tailor captions to specific audience"
             )
             
+            # Social Media Character Limits Option
+            st.markdown("**📱 Platform Optimization:**")
+            
+            # Pre-fill character limit option from profile
+            default_char_limit = "No limit"
+            if st.session_state.get('selected_company_profile'):
+                profile = st.session_state.selected_company_profile
+                default_char_limit = profile.get('character_limit_preference', 'No limit')
+            
+            character_limit_preference = st.selectbox(
+                "📊 Fit Character Limits",
+                ["No limit", "Facebook (≤500 chars)", "Instagram (≤400 chars)", "LinkedIn (≤700 chars)", "Twitter/X (≤280 chars)", "All platforms (≤280 chars)"],
+                index=["No limit", "Facebook (≤500 chars)", "Instagram (≤400 chars)", "LinkedIn (≤700 chars)", "Twitter/X (≤280 chars)", "All platforms (≤280 chars)"].index(default_char_limit) if default_char_limit in ["No limit", "Facebook (≤500 chars)", "Instagram (≤400 chars)", "LinkedIn (≤700 chars)", "Twitter/X (≤280 chars)", "All platforms (≤280 chars)"] else 0,
+                help="Optimize captions to fit specific social media platform character limits"
+            )
+            
+            # Show character limit info
+            if character_limit_preference != "No limit":
+                char_limits = {
+                    "Facebook (≤500 chars)": "📘 Facebook allows up to ~500 characters for optimal engagement",
+                    "Instagram (≤400 chars)": "📷 Instagram captions work best under 400 characters", 
+                    "LinkedIn (≤700 chars)": "💼 LinkedIn allows longer content up to ~700 characters",
+                    "Twitter/X (≤280 chars)": "🐦 Twitter/X has a strict 280 character limit",
+                    "All platforms (≤280 chars)": "🌐 Universal format that works on all platforms"
+                }
+                st.info(char_limits[character_limit_preference])
+            
             # Store in session state for cross-tab access
             st.session_state.temp_caption_style = caption_style
             st.session_state.temp_caption_length = caption_length
@@ -2594,6 +2643,7 @@ def main():
             st.session_state.temp_focus_keywords = focus_keywords
             st.session_state.temp_avoid_words = avoid_words
             st.session_state.temp_target_audience = target_audience
+            st.session_state.temp_character_limit_preference = character_limit_preference
     
     with tab3:
         st.header("🌐 Website Analysis & Context")
@@ -2721,6 +2771,9 @@ def main():
                     st.write(f"**Style:** {caption_style}")
                     st.write(f"**Length:** {caption_length}")
                     st.write(f"**Mode:** {'Text-Only' if text_only_mode else 'Image-Based'}")
+                    # Get character limit preference for display
+                    char_limit_pref = st.session_state.get('temp_character_limit_preference', 'No limit')
+                    st.write(f"**Character Limit:** {char_limit_pref}")
                 with config_col2:
                     st.write(f"**Model:** {'GPT-4o (Premium)' if use_premium_model else 'GPT-4o-mini'}")
                     st.write(f"**CTA:** {'Yes' if include_cta else 'No'}")
@@ -2753,6 +2806,8 @@ def main():
                     target_audience = st.session_state.get('temp_target_audience', 'General')
                 if 'text_only_mode' not in locals():
                     text_only_mode = st.session_state.get('temp_text_only_mode', False)
+                if 'character_limit_preference' not in locals():
+                    character_limit_preference = st.session_state.get('temp_character_limit_preference', 'No limit')
                 
                 # Build enhanced prompt with all customizations
                 enhanced_business_input = business_input
@@ -2774,7 +2829,8 @@ def main():
                     caption_style,
                     include_cta,
                     caption_length,
-                    text_only_mode
+                    text_only_mode,
+                    character_limit_preference
                 )
                 
                 if result:
@@ -2796,7 +2852,8 @@ def main():
                         'focus_keywords': focus_keywords,
                         'avoid_words': st.session_state.get('temp_avoid_words', ''),
                         'target_audience': target_audience,
-                        'text_only_mode': text_only_mode
+                        'text_only_mode': text_only_mode,
+                        'character_limit_preference': character_limit_preference
                     }
                     
                     show_progress_indicator(4, 4, "Captions generated successfully!")
@@ -2829,8 +2886,14 @@ def main():
                         with copy_col:
                             if CLIPBOARD_AVAILABLE:
                                 if st.button(f"📋 Copy", key=f"copy_btn_{i}", help=f"Copy caption {i+1} to clipboard"):
-                                    pyperclip.copy(caption.strip())
-                                    st.success("✅ Copied!")
+                                    try:
+                                        pyperclip.copy(caption.strip())
+                                        st.success("✅ Copied!")
+                                    except Exception as e:
+                                        st.error("❌ Copy failed - use manual selection instead")
+                                        st.info("💡 **Manual Copy:** Select and copy the text from the caption box below")
+                            else:
+                                st.info("💡 **Manual Copy:** Select and copy the text from the caption box below")
                         
                         with mark_used_col:
                             # Check if caption is already marked as used
@@ -2951,6 +3014,7 @@ def main():
                             'avoid_words': settings.get('avoid_words', ''),
                             'target_audience': settings.get('target_audience', 'General'),
                             'text_only_mode': settings.get('text_only_mode', False),
+                            'character_limit_preference': settings.get('character_limit_preference', 'No limit'),
                             'captions_generated_count': 1,
                             'website_analysis': st.session_state.get('website_analysis')
                         }
@@ -2997,6 +3061,7 @@ def main():
                                         'avoid_words': settings.get('avoid_words', ''),
                                         'target_audience': settings.get('target_audience', 'General'),
                                         'text_only_mode': settings.get('text_only_mode', False),
+                                        'character_limit_preference': settings.get('character_limit_preference', 'No limit'),
                                         'captions_generated_count': 1,
                                         'website_analysis': st.session_state.get('website_analysis')
                                     }
@@ -3032,6 +3097,7 @@ def main():
                                         'avoid_words': settings.get('avoid_words', ''),
                                         'target_audience': settings.get('target_audience', 'General'),
                                         'text_only_mode': settings.get('text_only_mode', False),
+                                        'character_limit_preference': settings.get('character_limit_preference', 'No limit'),
                                         'captions_generated_count': 1,
                                         'website_analysis': st.session_state.get('website_analysis')
                                     }
@@ -3171,7 +3237,9 @@ def main():
                                 batch_premium,
                                 batch_style,
                                 True,  # Include CTA
-                                batch_length
+                                batch_length,
+                                False,  # text_only_mode
+                                "No limit"  # character_limit_preference - default for batch
                             )
                             
                             if result:
@@ -3486,9 +3554,12 @@ def main():
                             # Copy button
                             if CLIPBOARD_AVAILABLE:
                                 if st.button("📋", key=f"copy_history_{result['hash']}", help="Copy caption"):
-                                    import pyperclip
-                                    pyperclip.copy(result['text'])
-                                    st.success("Copied!")
+                                    try:
+                                        import pyperclip
+                                        pyperclip.copy(result['text'])
+                                        st.success("Copied!")
+                                    except Exception as e:
+                                        st.error("Copy failed - please select text manually and copy with Ctrl+C")
                             
                             # Unmark button
                             if st.button("🔄", key=f"unmark_history_{result['hash']}", help="Remove from history"):
@@ -3519,9 +3590,12 @@ def main():
                                 combined_text = "\n\n---\n\n".join([
                                     r['text'] for r in results if r['hash'] in selected_captions
                                 ])
-                                import pyperclip
-                                pyperclip.copy(combined_text)
-                                st.success(f"Copied {len(selected_captions)} captions!")
+                                try:
+                                    import pyperclip
+                                    pyperclip.copy(combined_text)
+                                    st.success(f"Copied {len(selected_captions)} captions!")
+                                except Exception as e:
+                                    st.error("Copy failed - please select text manually and copy with Ctrl+C")
                             else:
                                 st.error("Clipboard not available")
 
