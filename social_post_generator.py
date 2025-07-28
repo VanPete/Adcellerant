@@ -55,34 +55,9 @@ APP_PASSWORD = os.getenv("APP_PASSWORD", "adcellerant2025")  # Change this!
 
 # === Utility Functions ===
 def safe_copy_to_clipboard(text, success_message="✅ Copied!", fallback_message="💡 **Manual Copy:**"):
-    """Safely copy text to clipboard with fallback options."""
-    # Try pyperclip first
-    try:
-        import pyperclip
-        # Test if pyperclip can actually access clipboard
-        pyperclip.copy(text)
-        # Try to read it back to verify it worked
-        if pyperclip.paste() == text:
-            st.success(success_message)
-            return True
-        else:
-            raise Exception("Clipboard verification failed")
-    except Exception:
-        # Fallback: Show error and provide easy copy method
-        st.error("❌ Clipboard access blocked by browser/system")
-        st.info(f"{fallback_message} Text ready to copy below:")
-        
-        # Create a text area that's easy to select and copy
-        st.text_area(
-            "📋 Select All (Ctrl+A) and Copy (Ctrl+C):",
-            value=text,
-            height=min(100, max(60, len(text) // 10)),  # Dynamic height based on text length
-            help="Click here, then Ctrl+A to select all, then Ctrl+C to copy",
-            key=f"manual_copy_{hash(text)}"
-        )
-        
-        st.info("💡 **Quick Copy Steps:** 1️⃣ Click the text box above → 2️⃣ Press Ctrl+A → 3️⃣ Press Ctrl+C")
-        return False
+    """Copy functionality disabled for cleaner UI."""
+    # Copy functionality removed - users can copy directly from text areas
+    return False
 
 # === Page Configuration ===
 st.set_page_config(
@@ -2905,7 +2880,7 @@ def main():
                         # Check if caption was previously used
                         is_duplicate, duplicate_info = is_caption_duplicate(caption.strip())
                         
-                        caption_header_col, copy_col, mark_used_col = st.columns([3, 1, 1])
+                        caption_header_col, mark_used_col = st.columns([4, 1])
                         
                         with caption_header_col:
                             if is_duplicate:
@@ -2914,17 +2889,19 @@ def main():
                             else:
                                 st.subheader(f"✨ Caption {i+1} (New)")
                         
-                        with copy_col:
-                            # Improved copy button with better fallback
-                            if st.button(f"📋", key=f"copy_btn_{i}", help=f"Copy caption {i+1} to clipboard", type="secondary"):
-                                success = safe_copy_to_clipboard(
-                                    caption.strip(), 
-                                    success_message="✅ Caption copied!",
-                                    fallback_message="💡 **Manual Copy:**"
-                                )
-                                # If copy failed, also show a tip about the text area below
-                                if not success:
-                                    st.info("� **Alternative:** You can also copy from the text box below")
+                        # with copy_col:
+                        #     # Copy functionality removed for cleaner UI
+                        #     pass
+                            # Copy button removed for cleaner UI
+                            # if st.button(f"📋", key=f"copy_btn_{i}", help=f"Copy caption {i+1} to clipboard", type="secondary"):
+                            #     success = safe_copy_to_clipboard(
+                            #         caption.strip(), 
+                            #         success_message="✅ Caption copied!",
+                            #         fallback_message="💡 **Manual Copy:**"
+                            #     )
+                            #     # If copy failed, also show a tip about the text area below
+                            #     if not success:
+                            #         st.info("� **Alternative:** You can also copy from the text box below")
                             
                             # Description for the copy icon
                             st.caption("Copy to Clipboard")
@@ -3589,11 +3566,11 @@ def main():
                         
                         # Action buttons
                         with action_col:
-                            # Copy button
-                            if CLIPBOARD_AVAILABLE:
-                                if st.button("📋", key=f"copy_history_{result['hash']}", help="Copy caption"):
-                                    safe_copy_to_clipboard(result['text'], success_message="Copied!", fallback_message="💡 Manual copy:")
-                                st.caption("Copy to Clipboard")
+                            # Copy button removed for cleaner UI
+                            # if CLIPBOARD_AVAILABLE:
+                            #     if st.button("📋", key=f"copy_history_{result['hash']}", help="Copy caption"):
+                            #         safe_copy_to_clipboard(result['text'], success_message="Copied!", fallback_message="💡 Manual copy:")
+                            #     st.caption("Copy to Clipboard")
                             
                             # Unmark button
                             if st.button("🔄", key=f"unmark_history_{result['hash']}", help="Remove from history"):
