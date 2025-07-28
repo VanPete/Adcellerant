@@ -7,11 +7,12 @@ AI-Powered Social Media Caption Generator with Advanced Website Analysis
 # Standard library imports
 import os
 import base64
+import csv
 import hashlib
 import io
 import json
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Third-party imports
 import requests
@@ -48,6 +49,8 @@ WEB_CLIPBOARD_AVAILABLE = True
 # === Constants ===
 COMPANY_DATA_FILE = "company_profiles.json"
 USED_CAPTIONS_FILE = "used_captions.json"
+FEEDBACK_FILE = "user_feedback.json"
+STATS_FILE = "app_statistics.json"
 APP_PASSWORD = os.getenv("APP_PASSWORD", "adcellerant2025")  # Change this!
 
 # === Page Configuration ===
@@ -349,6 +352,165 @@ def export_caption_history():
             caption_data.get('business', ''),
             caption_data.get('used_date', ''),
             caption_data.get('usage_count', 1)
+        ])
+    
+    return output.getvalue()
+
+# === Feedback & Statistics Tracking System ===
+def load_feedback_submissions():
+    """Load feedback submissions from JSON file."""
+    try:
+        if os.path.exists(FEEDBACK_FILE):
+            with open(FEEDBACK_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return []
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        return []
+    except Exception as e:
+        st.error(f"Error loading feedback: {str(e)}")
+        return []
+
+def save_feedback_submission(feedback_data):
+    """Save feedback submission to JSON file."""
+    try:
+        feedback_list = load_feedback_submissions()
+        
+        # Add timestamp and ID
+        feedback_data.update({
+            'submission_date': datetime.now().isoformat(),
+            'id': len(feedback_list) + 1
+        })
+        
+        feedback_list.append(feedback_data)
+        
+        with open(FEEDBACK_FILE, 'w', encoding='utf-8') as f:
+            json.dump(feedback_list, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        st.error(f"Error saving feedback: {str(e)}")
+        return False
+
+def load_app_statistics():
+    """Load app statistics from JSON file."""
+    try:
+        if os.path.exists(STATS_FILE):
+            with open(STATS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {
+            'total_captions_generated': 0,
+            'total_sessions': 0,
+            'first_use_date': datetime.now().isoformat(),
+            'last_updated': datetime.now().isoformat()
+        }
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        return {
+            'total_captions_generated': 0,
+            'total_sessions': 0,
+            'first_use_date': datetime.now().isoformat(),
+            'last_updated': datetime.now().isoformat()
+        }
+    except Exception as e:
+        st.error(f"Error loading statistics: {str(e)}")
+        return {
+            'total_captions_generated': 0,
+            'total_sessions': 0,
+            'first_use_date': datetime.now().isoformat(),
+            'last_updated': datetime.now().isoformat()
+        }
+
+def save_app_statistics(stats):
+    """Save app statistics to JSON file."""
+    try:
+        stats['last_updated'] = datetime.now().isoformat()
+        with open(STATS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(stats, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        st.error(f"Error saving statistics: {str(e)}")
+        return False
+
+def increment_captions_generated(count=3):
+    """Increment the total captions generated counter."""
+    stats = load_app_statistics()
+    stats['total_captions_generated'] += count
+    save_app_statistics(stats)
+    return stats['total_captions_generated']
+
+def get_feedback_summary():
+    """Get summary of feedback submissions."""
+    feedback_list = load_feedback_submissions()
+    
+    if not feedback_list:
+        return {
+            'total': 0,
+            'bug_reports': 0,
+            'feature_requests': 0,
+            'general_feedback': 0,
+            'questions': 0,
+            'recent': 0
+        }
+    
+    # Count by type
+    type_counts = {
+        'bug_reports': 0,
+        'feature_requests': 0,
+        'general_feedback': 0,
+        'questions': 0
+    }
+    
+    recent_count = 0
+    week_ago = datetime.now() - timedelta(days=7)
+    
+    for feedback in feedback_list:
+        feedback_type = feedback.get('type', '').lower()
+        if 'bug' in feedback_type:
+            type_counts['bug_reports'] += 1
+        elif 'feature' in feedback_type:
+            type_counts['feature_requests'] += 1
+        elif 'question' in feedback_type or 'support' in feedback_type:
+            type_counts['questions'] += 1
+        else:
+            type_counts['general_feedback'] += 1
+        
+        # Count recent submissions
+        try:
+            submission_date = datetime.fromisoformat(feedback.get('submission_date', ''))
+            if submission_date >= week_ago:
+                recent_count += 1
+        except:
+            continue
+    
+    return {
+        'total': len(feedback_list),
+        'recent': recent_count,
+        **type_counts
+    }
+
+def export_feedback_data():
+    """Export feedback data to CSV format."""
+    feedback_list = load_feedback_submissions()
+    
+    if not feedback_list:
+        return None
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write headers
+    writer.writerow(['ID', 'Type', 'Severity', 'Description', 'Steps', 'Browser', 'Email', 'Name', 'Submission Date'])
+    
+    # Write data
+    for feedback in feedback_list:
+        writer.writerow([
+            feedback.get('id', ''),
+            feedback.get('type', ''),
+            feedback.get('severity', ''),
+            feedback.get('description', ''),
+            feedback.get('steps', ''),
+            feedback.get('browser_info', ''),
+            feedback.get('email', ''),
+            feedback.get('name', ''),
+            feedback.get('submission_date', '')
         ])
     
     return output.getvalue()
@@ -1392,6 +1554,94 @@ def create_advanced_sidebar():
                         st.rerun()
                 st.caption("⚠️ This will reset duplicate detection")
         
+        # Admin: Feedback Management
+        st.markdown("### 💬 Feedback Management")
+        feedback_summary = get_feedback_summary()
+        
+        if feedback_summary['total'] > 0:
+            col_feedback1, col_feedback2 = st.columns(2)
+            with col_feedback1:
+                st.metric("Total Feedback", feedback_summary['total'])
+            with col_feedback2:
+                st.metric("This Week", feedback_summary['recent'])
+            
+            # Show feedback breakdown
+            with st.expander(f"📊 View Feedback ({feedback_summary['total']} submissions)"):
+                st.write("**Feedback Types:**")
+                st.write(f"🐛 Bug Reports: {feedback_summary['bug_reports']}")
+                st.write(f"💡 Feature Requests: {feedback_summary['feature_requests']}")
+                st.write(f"❓ Questions/Support: {feedback_summary['questions']}")
+                st.write(f"👍 General Feedback: {feedback_summary['general_feedback']}")
+                
+                # Load and display recent feedback
+                feedback_list = load_feedback_submissions()
+                if feedback_list:
+                    st.markdown("**Recent Submissions:**")
+                    
+                    # Sort by date (most recent first)
+                    sorted_feedback = sorted(feedback_list, 
+                                           key=lambda x: x.get('submission_date', ''), 
+                                           reverse=True)
+                    
+                    for i, feedback in enumerate(sorted_feedback[:5]):  # Show last 5
+                        with st.container():
+                            feedback_type = feedback.get('type', 'Unknown')
+                            submission_date = feedback.get('submission_date', '')
+                            
+                            # Format date
+                            try:
+                                date_obj = datetime.fromisoformat(submission_date)
+                                formatted_date = date_obj.strftime("%m/%d/%Y %H:%M")
+                            except:
+                                formatted_date = submission_date
+                            
+                            st.markdown(f"**#{feedback.get('id', i+1)} - {feedback_type}** *({formatted_date})*")
+                            
+                            # Show content based on type
+                            if 'description' in feedback:
+                                st.write(f"📝 {feedback['description'][:100]}..." if len(feedback.get('description', '')) > 100 else feedback.get('description', ''))
+                            elif 'feedback' in feedback:
+                                st.write(f"📝 {feedback['feedback'][:100]}..." if len(feedback.get('feedback', '')) > 100 else feedback.get('feedback', ''))
+                            elif 'question' in feedback:
+                                st.write(f"❓ {feedback['question'][:100]}..." if len(feedback.get('question', '')) > 100 else feedback.get('question', ''))
+                            
+                            if feedback.get('name') or feedback.get('email'):
+                                contact_info = []
+                                if feedback.get('name'):
+                                    contact_info.append(feedback['name'])
+                                if feedback.get('email'):
+                                    contact_info.append(feedback['email'])
+                                st.caption(f"👤 {' - '.join(contact_info)}")
+                            
+                            st.markdown("---")
+                    
+                    if len(feedback_list) > 5:
+                        st.caption(f"... and {len(feedback_list) - 5} more submissions")
+                
+                # Export functionality
+                st.markdown("**Management Actions:**")
+                col_export, col_clear = st.columns(2)
+                
+                with col_export:
+                    if st.button("📄 Export Feedback", help="Download all feedback as CSV"):
+                        csv_data = export_feedback_data()
+                        if csv_data:
+                            st.download_button(
+                                label="⬇️ Download CSV",
+                                data=csv_data,
+                                file_name=f"feedback_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                mime="text/csv"
+                            )
+                
+                with col_clear:
+                    if st.button("🗑️ Clear All Feedback", help="Delete all feedback submissions", type="secondary"):
+                        if os.path.exists(FEEDBACK_FILE):
+                            os.remove(FEEDBACK_FILE)
+                            st.success("✅ Cleared all feedback records")
+                            st.rerun()
+        else:
+            st.info("No feedback submissions yet.")
+        
         # Quick business templates
         st.markdown("### 🏢 Business Templates")
         templates = create_business_profile_template()
@@ -1408,11 +1658,14 @@ def create_advanced_sidebar():
 # === Main Application Functions ===
 def initialize_session_state():
     """Initialize session state variables."""
+    # Load persistent captions counter
+    stats = load_app_statistics()
+    
     default_values = {
         'generated_captions': None,
         'current_image': None,
         'website_analysis': None,
-        'captions_generated': 0,
+        'captions_generated': stats['total_captions_generated'],
         'show_documentation': False,
         'show_feedback': False
     }
@@ -1730,10 +1983,44 @@ def show_feedback_popup():
         
         with col_submit:
             if st.button("📤 Submit Feedback", type="primary"):
-                # Here you would normally send the feedback to a backend service
-                # For now, we'll just show a success message
-                st.success("✅ Thank you! Your feedback has been recorded.")
-                st.info("💡 **Note**: In a production version, this would send your feedback to the development team.")
+                # Prepare feedback data
+                feedback_data = {
+                    'type': feedback_type,
+                    'email': contact_email,
+                    'name': contact_name
+                }
+                
+                # Add type-specific data
+                if feedback_type == "🐛 Bug Report":
+                    feedback_data.update({
+                        'severity': priority,
+                        'description': bug_description,
+                        'steps': steps_to_reproduce,
+                        'browser_info': browser_info
+                    })
+                elif feedback_type == "💡 Feature Request":
+                    feedback_data.update({
+                        'description': feature_description,
+                        'use_case': use_case,
+                        'priority': priority
+                    })
+                elif feedback_type == "👍 General Feedback":
+                    feedback_data.update({
+                        'feedback': general_feedback,
+                        'rating': rating
+                    })
+                else:  # Question/Support
+                    feedback_data.update({
+                        'question': question,
+                        'category': question_type
+                    })
+                
+                # Save feedback
+                if save_feedback_submission(feedback_data):
+                    st.success("✅ Thank you! Your feedback has been recorded and saved.")
+                    st.info("� Your feedback helps us improve the tool for everyone!")
+                else:
+                    st.error("❌ Sorry, there was an error saving your feedback. Please try again.")
                 
                 # Clear the form
                 st.session_state.show_feedback = False
@@ -2482,7 +2769,10 @@ def main():
                 if result:
                     show_progress_indicator(3, 4, "Processing results")
                     st.session_state.generated_captions = result
-                    st.session_state.captions_generated += 1
+                    
+                    # Update persistent captions counter (3 captions generated)
+                    new_total = increment_captions_generated(3)
+                    st.session_state.captions_generated = new_total
                     
                     # Store current settings for potential saving
                     st.session_state.current_settings = {
@@ -2888,10 +3178,10 @@ def main():
                         status_text.text(f"✅ Batch processing complete! {len(batch_results)} images processed.")
                         st.balloons()
                         
-                        # Update session state
-                        if 'captions_generated' not in st.session_state:
-                            st.session_state.captions_generated = 0
-                        st.session_state.captions_generated += len(batch_results)
+                        # Update persistent captions counter (3 captions per image)
+                        total_captions = len(batch_results) * 3
+                        new_total = increment_captions_generated(total_captions)
+                        st.session_state.captions_generated = new_total
                         
                         # Show results summary
                         st.markdown("### 📊 Batch Results Summary")
