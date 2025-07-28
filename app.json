@@ -1,0 +1,28 @@
+{
+  "name": "adcellerant-social-caption-generator",
+  "description": "AI-Powered Social Media Caption Generator with Website Analysis and Password Protection",
+  "repository": "https://github.com/yourusername/adcellerant-caption-generator",
+  "keywords": ["streamlit", "ai", "social-media", "captions", "openai"],
+  "env": {
+    "OPENAI_API_KEY": {
+      "description": "Your OpenAI API key for AI caption generation",
+      "required": true
+    },
+    "APP_PASSWORD": {
+      "description": "Password for application access",
+      "required": true,
+      "value": "Jax2021"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+}
