@@ -2115,8 +2115,9 @@ def _handle_image_selection():
                 image_source = f"Uploaded file: {st.session_state.uploaded_image}"
             elif st.session_state.get('clipboard_image'):
                 image_source = "Clipboard"
-            elif st.session_state.get('selected_web_image'):
-                image_source = "Website image"
+            elif st.session_state.get('selected_web_image') is not None:
+                image_num = st.session_state.selected_web_image + 1
+                image_source = f"Website Image {image_num}"
             
             st.success(f"✅ Current image: {image_source}")
         
@@ -2187,40 +2188,67 @@ def _handle_website_image_selection():
     website_analysis = st.session_state.get('website_analysis')
     
     if website_analysis and website_analysis.get('images'):
-        st.info("📝 Website images found! Select one below:")
+        # Check if we have a website image selected
+        selected_web_image = st.session_state.get('selected_web_image')
+        current_image = st.session_state.get('current_image')
+        
+        st.markdown("### �️ Website Images")
+        st.info("🌐 **Website images found!** Select one below to use for your captions.")
         
         images = website_analysis['images']
+        
+        # Create a grid layout for better display
+        cols = st.columns(min(3, len(images)))
+        
         for i, img_data in enumerate(images):
-            col1, col2 = st.columns([1, 2])
-            with col1:
+            col_idx = i % 3
+            with cols[col_idx]:
                 try:
-                    st.image(img_data['url'], caption=f"Image {i+1}", use_container_width=True)
-                except:
-                    st.write(f"🖼️ Image {i+1} (preview unavailable)")
-            
-            with col2:
-                st.write(f"**Description:** {img_data.get('description', 'Website image')}")
-                if st.button(f"Use Image {i+1}", key=f"select_web_img_{i}"):
-                    try:
-                        import requests
-                        response = requests.get(img_data['url'], timeout=10)
-                        if response.status_code == 200:
-                            from PIL import Image
-                            import io
-                            image = Image.open(io.BytesIO(response.content))
-                            st.session_state.current_image = image
-                            st.session_state.selected_web_image = img_data
-                            st.success(f"✅ Selected Image {i+1}")
-                            st.rerun()
+                    # Load and display the image
+                    response = requests.get(img_data['url'], timeout=10)
+                    if response.status_code == 200:
+                        web_image = Image.open(io.BytesIO(response.content))
+                        st.image(web_image, caption=f"Image {i+1}", use_container_width=True)
+                        
+                        # Show description
+                        description = img_data.get('description', 'Website image')
+                        if len(description) > 60:
+                            description = description[:60] + "..."
+                        st.caption(description)
+                        
+                        # Check if this image is currently selected
+                        is_selected = (selected_web_image == i and current_image is not None)
+                        
+                        # Button styling based on selection
+                        if is_selected:
+                            if st.button(f"✅ Selected", key=f"selected_web_img_{i}", type="primary", use_container_width=True, disabled=True):
+                                pass  # Button is disabled when selected
+                            st.success("Currently using this image")
                         else:
-                            st.error("❌ Failed to load image")
-                    except Exception as e:
-                        st.error(f"❌ Error loading image: {str(e)}")
+                            if st.button(f"Use Image {i+1}", key=f"select_web_img_{i}", use_container_width=True):
+                                try:
+                                    st.session_state.current_image = web_image
+                                    st.session_state.selected_web_image = i
+                                    st.success(f"✅ Selected Image {i+1}")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Error selecting image: {str(e)}")
+                    else:
+                        st.warning(f"⚠️ Could not load Image {i+1}")
+                        st.write(f"**Description:** {img_data.get('description', 'Website image')}")
+                        
+                except Exception as e:
+                    st.warning(f"⚠️ Could not load Image {i+1}")
+                    st.caption(f"URL: {img_data['url'][:50]}...")
+        
+        # Show selection status
+        if selected_web_image is not None:
+            st.success(f"🎯 **Currently selected:** Website Image {selected_web_image + 1}")
         
         # Return the currently selected image if any
         return st.session_state.get('current_image')
     else:
-        st.info("📝 Enter a website URL in the 'Website Analysis' tab to see available images.")
+        st.info("🌐 **No website images available**\n\nAnalyze a website in the 'Website Analysis' tab to find images.")
         return None
 
 def _display_text_only_info():
@@ -2633,15 +2661,9 @@ def main():
                 st.markdown("### 🖼️ Website Images")
                 website_info = st.session_state.website_analysis
                 
-                # Check if user has already selected an image or is in text-only mode
-                has_user_image = st.session_state.get('current_image') is not None
+                st.info("ℹ️ Website images found! Go to the 'Image & Business' tab to select one for your captions.")
                 
-                if has_user_image:
-                    st.info("ℹ️ Your uploaded/pasted image takes priority. Website images shown for reference:")
-                else:
-                    st.write("Select an image from the company website:")
-                
-                # Create a grid of images
+                # Create a grid of images for reference only
                 cols = st.columns(min(3, len(website_info['images'])))
                 
                 for i, img_info in enumerate(website_info['images']):
@@ -2652,15 +2674,6 @@ def main():
                             if img_response.status_code == 200:
                                 web_image = Image.open(io.BytesIO(img_response.content))
                                 st.image(web_image, caption=f"Image {i+1}", use_container_width=True)
-                                
-                                # Allow selection if no user image is already selected
-                                if not has_user_image:
-                                    if st.button(f"✅ Use This Image", key=f"web_img_{i}", use_container_width=True):
-                                        st.session_state.current_image = web_image
-                                        st.session_state.selected_web_image = i
-                                        st.success(f"Selected website image {i+1}")
-                                        st.rerun()
-                                
                                 st.caption(img_info['description'][:50] + "..." if len(img_info['description']) > 50 else img_info['description'])
                         except Exception:
                             st.warning(f"⚠️ Could not load image {i+1}")
