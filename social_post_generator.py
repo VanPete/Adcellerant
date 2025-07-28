@@ -1596,13 +1596,13 @@ def show_documentation_popup():
             
             #### **Data & Privacy:**
             **Q: Is my data saved permanently?**
-            A: Company profiles and caption history are stored locally in your browser session.
+            A: Yes! Company profiles and caption history are saved to the server and persist across browser sessions. All authorized users can access the shared data.
             
             **Q: Can I export my data?**
             A: Yes! Use the export features in Caption History tab and company management.
             
             **Q: How do I delete my data?**
-            A: Use the clear functions in the sidebar, or clear browser data for complete removal.
+            A: Use the clear functions in the sidebar to remove data from the shared database.
             """)
         
         st.markdown("---")
