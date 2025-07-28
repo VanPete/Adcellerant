@@ -1716,7 +1716,6 @@ def main():
             
             with download_col2:
                 if st.session_state.get('current_image') and not text_only_mode:
-                    from datetime import datetime
                     current_date = datetime.now().strftime("%Y%m%d")
                     company_safe_name = business_input.replace(' ', '_').replace('/', '_').replace('\\', '_')
                     
