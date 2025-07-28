@@ -1517,6 +1517,28 @@ def create_advanced_sidebar():
                                     st.session_state.selected_company_name = edit_company
                                     st.success(f"✅ Loaded {edit_company} for editing. Update the information in the tabs and save with a new name or overwrite the existing profile.")
                                     st.rerun()
+                            
+                            # Show save button if company is currently being edited
+                            if (st.session_state.get('editing_company') == edit_company and 
+                                st.session_state.get('selected_company_profile')):
+                                if st.button("💾 Save Changes", type="secondary"):
+                                    try:
+                                        # Create updated profile from current settings
+                                        updated_profile = create_profile_data_from_settings()
+                                        
+                                        # Save to company profiles
+                                        company_profiles = load_company_profiles()
+                                        company_profiles[edit_company] = updated_profile
+                                        save_company_profiles(company_profiles)
+                                        
+                                        # Update session state
+                                        st.session_state.selected_company_profile = updated_profile
+                                        st.session_state.editing_profile = updated_profile
+                                        
+                                        st.success(f"✅ Successfully saved changes to {edit_company}")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Failed to save changes: {str(e)}")
                 else:
                     st.info("No saved companies yet. Create some posts and save company profiles!")
         else:
@@ -2207,7 +2229,7 @@ def _handle_image_selection():
                 st.rerun()
     
     # Build options list based on available functionality
-    image_options = ["📁 Upload File", " Use Website Image", "📝 Text-Only (No Image)"]
+    image_options = ["📁 Upload File", "🌐 Use Website Image", "📝 Text-Only (No Image)"]
     
     # Get current selection and detect changes
     current_selection = st.session_state.get('image_selection_mode', image_options[0])
@@ -2235,7 +2257,7 @@ def _handle_image_selection():
         _display_text_only_info()
     elif image_option == "📁 Upload File":
         image = _handle_file_upload()
-    elif image_option == " Use Website Image":
+    elif image_option == "🌐 Use Website Image":
         image = _handle_website_image_selection()
     
     return image, text_only_mode
