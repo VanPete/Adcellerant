@@ -1523,8 +1523,19 @@ def create_advanced_sidebar():
                                 st.session_state.get('selected_company_profile')):
                                 if st.button("💾 Save Changes", type="secondary"):
                                     try:
+                                        # Collect current settings from session state
+                                        current_settings = {
+                                            'business_input': st.session_state.get('temp_business_input', ''),
+                                            'website_url': st.session_state.get('temp_website_url', ''),
+                                            'caption_style': st.session_state.get('temp_caption_style', 'Professional'),
+                                            'caption_length': st.session_state.get('temp_caption_length', 'Medium (4-6 sentences)'),
+                                            'use_premium_model': st.session_state.get('temp_use_premium_model', False),
+                                            'include_cta': st.session_state.get('temp_include_cta', True),
+                                            'character_limit_preference': st.session_state.get('temp_character_limit_preference', 'No limit')
+                                        }
+                                        
                                         # Create updated profile from current settings
-                                        updated_profile = create_profile_data_from_settings()
+                                        updated_profile = create_profile_data_from_settings(current_settings)
                                         
                                         # Save to company profiles
                                         company_profiles = load_company_profiles()
