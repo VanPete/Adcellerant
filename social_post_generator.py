@@ -117,7 +117,7 @@ def show_logout_option():
             # Clear password session
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
-            st.experimental_rerun()
+            st.rerun()
 
 # === Company Directory Management ===
 def load_company_profiles():
@@ -895,7 +895,7 @@ def create_advanced_sidebar():
         if st.button("🆕 Start Over", type="secondary", use_container_width=True, help="Clear all fields and start fresh"):
             clear_all_session_data()
             st.success("✅ All fields cleared!")
-            st.experimental_rerun()
+            st.rerun()
         
         st.markdown("---")
         
@@ -921,7 +921,7 @@ def create_advanced_sidebar():
                         st.session_state.selected_company_profile = profile
                         st.session_state.selected_company_name = selected_company
                         st.success(f"✅ Loaded profile for {selected_company}")
-                        st.experimental_rerun()
+                        st.rerun()
             
             # Show company management
             with st.expander("📊 Manage Companies"):
@@ -965,7 +965,7 @@ def create_advanced_sidebar():
                         if delete_company != "Select..." and st.button("🗑️ Delete", type="secondary"):
                             if delete_company_profile(delete_company):
                                 st.success(f"✅ Deleted {delete_company}")
-                                st.experimental_rerun()
+                                st.rerun()
                             else:
                                 st.error("❌ Failed to delete company")
                     
@@ -986,7 +986,7 @@ def create_advanced_sidebar():
                                     st.session_state.selected_company_profile = profile
                                     st.session_state.selected_company_name = edit_company
                                     st.success(f"✅ Loaded {edit_company} for editing. Update the information in the tabs and save with a new name or overwrite the existing profile.")
-                                    st.experimental_rerun()
+                                    st.rerun()
                 else:
                     st.info("No saved companies yet. Create some posts and save company profiles!")
         else:
@@ -1120,7 +1120,7 @@ def _display_loaded_profile_info():
             
             if st.button("🔄 Cancel Editing", type="secondary"):
                 _clear_editing_mode()
-                st.experimental_rerun()
+                st.rerun()
         else:
             st.success(f"✅ **Loaded Profile:** {company_name}")
         
@@ -1130,7 +1130,7 @@ def _display_loaded_profile_info():
         if not st.session_state.get('editing_company'):
             if st.button("🔄 Clear Loaded Profile", type="secondary"):
                 _clear_loaded_profile()
-                st.experimental_rerun()
+                st.rerun()
 
 def _display_profile_details(profile):
     """Display company profile details in columns."""
@@ -1529,7 +1529,7 @@ def main():
                                         st.session_state.current_image = web_image
                                         st.session_state.selected_web_image = i
                                         st.success(f"Selected website image {i+1}")
-                                        st.experimental_rerun()
+                                        st.rerun()
                                 
                                 st.caption(img_info['description'][:50] + "..." if len(img_info['description']) > 50 else img_info['description'])
                         except Exception:
@@ -1551,7 +1551,7 @@ def main():
                 
                 if st.button("🔄 Re-analyze Website"):
                     st.session_state.website_analysis = None
-                    st.experimental_rerun()
+                    st.rerun()
     
     with tab4:
         st.header("📱 Generate & Download Captions")
@@ -1828,7 +1828,7 @@ def main():
                                         for key in ['editing_company', 'editing_profile', 'show_save_options']:
                                             if key in st.session_state:
                                                 del st.session_state[key]
-                                        st.experimental_rerun()
+                                        st.rerun()
                                     else:
                                         st.error("❌ Failed to update company profile")
                         
@@ -1863,13 +1863,13 @@ def main():
                                         for key in ['editing_company', 'editing_profile', 'show_save_options']:
                                             if key in st.session_state:
                                                 del st.session_state[key]
-                                        st.experimental_rerun()
+                                        st.rerun()
                                     else:
                                         st.error("❌ Failed to save new company profile")
                         
                         if st.button("❌ Cancel Save", type="secondary"):
                             st.session_state.show_save_options = False
-                            st.experimental_rerun()
+                            st.rerun()
     
     with tab5:
         st.header("🔄 Batch Processing")
