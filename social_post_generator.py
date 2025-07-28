@@ -2221,18 +2221,16 @@ def _handle_website_image_selection():
                         
                         # Button styling based on selection
                         if is_selected:
-                            if st.button(f"✅ Selected", key=f"selected_web_img_{i}", type="primary", use_container_width=True, disabled=True):
-                                pass  # Button is disabled when selected
-                            st.success("Currently using this image")
+                            # Show as selected with primary styling and checkmark
+                            st.button(f"✅ Use Image {i+1} (Selected)", key=f"selected_web_img_{i}", type="primary", use_container_width=True, disabled=False)
+                            st.success("✓ Currently using this image")
                         else:
                             if st.button(f"Use Image {i+1}", key=f"select_web_img_{i}", use_container_width=True):
-                                try:
-                                    st.session_state.current_image = web_image
-                                    st.session_state.selected_web_image = i
-                                    st.success(f"✅ Selected Image {i+1}")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ Error selecting image: {str(e)}")
+                                # Set the selection
+                                st.session_state.current_image = web_image
+                                st.session_state.selected_web_image = i
+                                # Force a rerun to update the UI
+                                st.rerun()
                     else:
                         st.warning(f"⚠️ Could not load Image {i+1}")
                         st.write(f"**Description:** {img_data.get('description', 'Website image')}")
