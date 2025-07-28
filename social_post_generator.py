@@ -70,7 +70,7 @@ def check_password():
     if "password_correct" not in st.session_state:
         # First run, show input for password.
         st.markdown("## 🔐 Access Required")
-        st.info("This application requires a password to access. Please contact Adcellerant for access.")
+        st.info("This application requires a password to access. Please contact Maddie Stitt for access.")
         st.text_input(
             "Password", 
             type="password", 
@@ -96,7 +96,7 @@ def check_password():
         # Password not correct, show input + error.
         st.markdown("## 🔐 Access Required")
         st.error("❌ Incorrect password. Please try again.")
-        st.info("This application requires a password to access. Please contact Adcellerant for access.")
+        st.info("This application requires a password to access. Please contact Maddie Stitt for access.")
         st.text_input(
             "Password", 
             type="password", 
