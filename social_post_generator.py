@@ -620,19 +620,47 @@ def create_profile_data_from_settings(settings):
 def clear_all_session_data():
     """Clear all session state data for starting over."""
     keys_to_clear = [
-        'current_image', 'generated_captions', 'website_analysis', 
-        'selected_web_image', 'auto_business', 'selected_company_profile',
-        'selected_company_name', 'editing_company', 'editing_profile', 
+        # Image related
+        'current_image', 'original_image', 'batch_images',
+        'selected_web_image', 'clipboard_image', 'uploaded_image',
+        
+        # Caption and generation related
+        'generated_captions', 'is_batch_result',
+        
+        # Website and business related
+        'website_analysis', 'auto_business', 'auto_filled_business_name',
+        'previous_website_url', 'previous_auto_fill',
+        
+        # Company profiles and settings
+        'selected_company_profile', 'selected_company_name', 
+        'editing_company', 'editing_profile',
+        
+        # Temporary form inputs
+        'temp_business_input', 'temp_website_url', 'temp_text_only_mode',
+        'temp_caption_style', 'temp_caption_length', 'temp_use_premium_model',
+        'temp_include_cta', 'temp_focus_keywords', 'temp_avoid_words',
+        'temp_target_audience', 'temp_character_limit_preference',
+        
+        # UI state
         'show_save_options', 'show_documentation', 'show_feedback',
-        'image_selection_mode', 'clipboard_image', 'uploaded_image'
+        'image_selection_mode', 'company_selector', 'management_mode',
+        'delete_selector', 'edit_selector', 'website_url_input',
+        
+        # Current settings for saving
+        'current_settings'
     ]
     
+    # Clear all specified keys
+    cleared_count = 0
     for key in keys_to_clear:
         if key in st.session_state:
             del st.session_state[key]
+            cleared_count += 1
     
     # Clear cached data
     st.cache_data.clear()
+    
+    return cleared_count
 
 # === Website Analysis Functions ===
 @st.cache_data(ttl=300, show_spinner=False)
@@ -1445,8 +1473,11 @@ def create_advanced_sidebar():
         # Start Over Button - prominently placed at top
         st.markdown("### 🔄 Quick Actions")
         if st.button("🆕 Start Over", type="secondary", use_container_width=True, help="Clear all fields and start fresh"):
-            clear_all_session_data()
-            st.success("✅ All fields cleared!")
+            cleared_count = clear_all_session_data()
+            if cleared_count > 0:
+                st.success(f"✅ All fields cleared! ({cleared_count} items reset)")
+            else:
+                st.info("💡 No data to clear - already starting fresh!")
             st.rerun()
         
         st.markdown("---")
@@ -2292,13 +2323,21 @@ def handle_single_page_layout(template_config):
                     
                     with mgmt_col1:
                         if st.button("🗑️ Clear All Images", type="secondary", use_container_width=True):
-                            if 'batch_images' in st.session_state:
-                                del st.session_state.batch_images
-                            if 'current_image' in st.session_state:
-                                del st.session_state.current_image
-                            if 'original_image' in st.session_state:
-                                del st.session_state.original_image
-                            st.success("✅ All batch images cleared!")
+                            # Clear all image and batch-related session state
+                            image_keys_to_clear = [
+                                'batch_images', 'current_image', 'original_image',
+                                'generated_captions', 'is_batch_result', 'website_analysis'
+                            ]
+                            cleared_count = 0
+                            for key in image_keys_to_clear:
+                                if key in st.session_state:
+                                    del st.session_state[key]
+                                    cleared_count += 1
+                            
+                            if cleared_count > 0:
+                                st.success("✅ All images and data cleared!")
+                            else:
+                                st.info("💡 No images to clear")
                             st.rerun()
                     
                     with mgmt_col2:
@@ -2430,11 +2469,15 @@ def handle_single_page_layout(template_config):
                     
                     # Quick actions
                     if st.button("🗑️ Clear Image", use_container_width=True):
-                        # Clear both current and original images
-                        if 'current_image' in st.session_state:
-                            del st.session_state.current_image
-                        if 'original_image' in st.session_state:
-                            del st.session_state.original_image
+                        # Clear all image-related session state
+                        image_keys_to_clear = [
+                            'current_image', 'original_image', 'batch_images', 
+                            'generated_captions', 'is_batch_result'
+                        ]
+                        for key in image_keys_to_clear:
+                            if key in st.session_state:
+                                del st.session_state[key]
+                        st.success("✅ All images cleared!")
                         st.rerun()
                     
                     # Show if image has been edited
