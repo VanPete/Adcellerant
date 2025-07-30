@@ -2158,26 +2158,73 @@ def handle_single_page_layout(template_config):
                 if st.session_state.get('website_analysis'):
                     website_images = st.session_state.website_analysis.get('images', [])
                     if website_images:
-                        selected_img_idx = st.selectbox(
-                            "Select website image:",
-                            range(len(website_images)),
-                            format_func=lambda x: f"Image {x+1}: {website_images[x]['description'][:50]}..."
-                        )
+                        st.markdown("**📸 Available Website Images:**")
                         
-                        if st.button("🖼️ Use Selected Image"):
-                            try:
-                                img_url = website_images[selected_img_idx]['url']
-                                response = requests.get(img_url, timeout=10)
-                                website_image = Image.open(io.BytesIO(response.content))
-                                
-                                # Store both original and current versions
-                                st.session_state.original_image = website_image.copy()
-                                st.session_state.current_image = website_image.copy()
-                                current_image = website_image
-                                
-                                st.success("✅ Website image loaded!")
-                            except Exception as e:
-                                st.error(f"Failed to load image: {str(e)}")
+                        # Create a more visual selection interface
+                        cols_per_row = 2
+                        for i in range(0, len(website_images), cols_per_row):
+                            cols = st.columns(cols_per_row)
+                            
+                            for j, col in enumerate(cols):
+                                img_idx = i + j
+                                if img_idx < len(website_images):
+                                    img_data = website_images[img_idx]
+                                    
+                                    with col:
+                                        st.markdown(f"**Image {img_idx + 1}**")
+                                        
+                                        # Try to load and display preview
+                                        try:
+                                            response = requests.get(img_data['url'], timeout=5)
+                                            preview_image = Image.open(io.BytesIO(response.content))
+                                            
+                                            # Resize for preview (max 200px width)
+                                            preview_width = min(200, preview_image.width)
+                                            preview_height = int(preview_image.height * (preview_width / preview_image.width))
+                                            preview_image_resized = preview_image.resize((preview_width, preview_height), Image.Resampling.LANCZOS)
+                                            
+                                            st.image(preview_image_resized, use_container_width=True)
+                                            
+                                            # Show image info
+                                            st.caption(f"📏 {preview_image.width}×{preview_image.height}px")
+                                            if img_data.get('description'):
+                                                st.caption(f"📝 {img_data['description'][:40]}...")
+                                            
+                                            # Select button for this image
+                                            if st.button(f"✅ Use Image {img_idx + 1}", key=f"select_img_{img_idx}", use_container_width=True):
+                                                try:
+                                                    # Store both original and current versions
+                                                    st.session_state.original_image = preview_image.copy()
+                                                    st.session_state.current_image = preview_image.copy()
+                                                    st.success(f"✅ Website image {img_idx + 1} loaded!")
+                                                    st.rerun()
+                                                except Exception as e:
+                                                    st.error(f"Failed to load image: {str(e)}")
+                                        
+                                        except Exception as e:
+                                            # If preview fails, show fallback
+                                            st.error("🖼️ Preview unavailable")
+                                            st.caption(f"📝 {img_data.get('description', 'No description')[:40]}...")
+                                            st.caption(f"🔗 {img_data['url'][:30]}...")
+                                            
+                                            if st.button(f"📥 Try Load Image {img_idx + 1}", key=f"load_img_{img_idx}", use_container_width=True):
+                                                try:
+                                                    # Try to load with longer timeout
+                                                    response = requests.get(img_data['url'], timeout=10)
+                                                    website_image = Image.open(io.BytesIO(response.content))
+                                                    
+                                                    # Store both original and current versions
+                                                    st.session_state.original_image = website_image.copy()
+                                                    st.session_state.current_image = website_image.copy()
+                                                    st.success(f"✅ Website image {img_idx + 1} loaded!")
+                                                    st.rerun()
+                                                except Exception as load_error:
+                                                    st.error(f"Failed to load image: {str(load_error)}")
+                        
+                        # Add a quick load all previews button
+                        st.markdown("---")
+                        if st.button("🔄 Refresh All Previews", help="Reload all image previews"):
+                            st.rerun()
                     else:
                         st.info("No website images found. Analyze a website first.")
                 else:
