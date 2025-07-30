@@ -829,7 +829,7 @@ def clear_all_session_data():
     """Clear all session state data for starting over."""
     keys_to_clear = [
         # Image related
-        'current_image', 'original_image', 'batch_images',
+        'current_image', 'original_image', 'batch_images', 'batch_captions',
         'selected_web_image', 'clipboard_image', 'uploaded_image',
         
         # Caption and generation related
@@ -2697,6 +2697,8 @@ def handle_single_page_layout(template_config):
                             # Clear batch images and related data
                             if 'batch_images' in st.session_state:
                                 del st.session_state['batch_images']
+                            if 'batch_captions' in st.session_state:
+                                del st.session_state['batch_captions']
                             if 'selected_batch_image' in st.session_state:
                                 del st.session_state['selected_batch_image']
                             if 'current_image' in st.session_state:
@@ -2747,29 +2749,31 @@ def handle_single_page_layout(template_config):
                                         use_container_width=True
                                     )
                                     
-                                    # Individual controls
-                                    img_col1, img_col2 = st.columns(2)
-                                    
-                                    with img_col1:
-                                        if st.button(f"🗑️ Remove", key=f"remove_{img_idx}"):
-                                            # Remove from session state directly
-                                            st.session_state.batch_images.pop(img_idx)
-                                            # Also clear selected image if it was the one removed
-                                            if hasattr(st.session_state, 'selected_batch_image') and st.session_state.selected_batch_image == img_idx:
-                                                del st.session_state['selected_batch_image']
-                                            # Adjust selected index if it's higher than removed index
-                                            elif hasattr(st.session_state, 'selected_batch_image') and st.session_state.selected_batch_image > img_idx:
-                                                st.session_state.selected_batch_image -= 1
-                                            st.success(f"✅ Removed {img_data['filename']}")
-                                            st.rerun()
-                                    
-                                    with img_col2:
-                                        if st.button(f"👁️ Preview", key=f"preview_{img_idx}"):
-                                            st.session_state.current_image = img_data['image']
-                                            st.session_state.original_image = img_data['image'].copy()
-                                            st.session_state.selected_batch_image = img_idx
-                                            st.success(f"✅ Selected {img_data['filename']} for editing")
-                                            st.rerun()
+                                    # Display generated captions for this image if available
+                                    if hasattr(st.session_state, 'batch_captions') and st.session_state.batch_captions:
+                                        if img_idx < len(st.session_state.batch_captions):
+                                            image_captions = st.session_state.batch_captions[img_idx]
+                                            if image_captions and image_captions.strip():
+                                                st.markdown("**📝 Generated Captions:**")
+                                                
+                                                # Split captions and display each one
+                                                caption_list = [cap.strip() for cap in image_captions.split('\n\n') if cap.strip()]
+                                                for cap_idx, caption in enumerate(caption_list):
+                                                    if caption.strip():
+                                                        with st.expander(f"Caption {cap_idx + 1}", expanded=cap_idx == 0):
+                                                            st.text_area(
+                                                                "Caption Text:",
+                                                                value=caption.strip(),
+                                                                height=100,
+                                                                key=f"batch_img_{img_idx}_cap_{cap_idx}",
+                                                                help="Copy this caption to use in your social media posts"
+                                                            )
+                                                            
+                                                            # Character count
+                                                            char_count = len(caption.strip())
+                                                            st.caption(f"📊 {char_count} characters")
+                                    else:
+                                        st.info("💡 Generate captions to see them here")
                     
                     # Show currently selected image for editing
                     if hasattr(st.session_state, 'selected_batch_image') and st.session_state.selected_batch_image is not None:
@@ -2941,7 +2945,7 @@ def handle_single_page_layout(template_config):
                         if st.button("🗑️ Clear All Images", type="secondary", use_container_width=True, key="clear_batch_bottom"):
                             # Clear all image and batch-related session state
                             image_keys_to_clear = [
-                                'batch_images', 'current_image', 'original_image',
+                                'batch_images', 'batch_captions', 'current_image', 'original_image',
                                 'generated_captions', 'is_batch_result', 'website_analysis',
                                 'selected_batch_image'
                             ]
@@ -3450,6 +3454,7 @@ def handle_single_page_layout(template_config):
                     # Batch generation
                     batch_images = st.session_state.batch_images
                     all_captions = []
+                    batch_captions = []  # Store captions per image
                     
                     progress_bar = st.progress(0)
                     status_text = st.empty()
@@ -3473,15 +3478,23 @@ def handle_single_page_layout(template_config):
                         )
                         
                         if result:
-                            # Add image info header to captions
+                            # Store individual captions for this image
+                            batch_captions.append(result)
+                            
+                            # Add image info header to captions for the combined display (if needed)
                             image_header = f"\n{'='*60}\n📸 IMAGE: {img_data['filename']} ({img_data['size'][0]}×{img_data['size'][1]}px)\n{'='*60}\n"
                             all_captions.append(image_header + result)
+                        else:
+                            batch_captions.append("")  # Empty if generation failed
                     
                     progress_bar.empty()
                     status_text.empty()
                     
                     if all_captions:
-                        # Combine all batch captions
+                        # Store captions per image for display below images
+                        st.session_state.batch_captions = batch_captions
+                        
+                        # Combine all batch captions for download functionality
                         batch_result = "\n\n".join(all_captions)
                         st.session_state.generated_captions = batch_result
                         st.session_state.is_batch_result = True
