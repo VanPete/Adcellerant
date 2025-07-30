@@ -1873,9 +1873,272 @@ def handle_single_page_layout(template_config):
                     help="Upload an image file for caption generation"
                 )
                 if uploaded_file:
-                    current_image = Image.open(uploaded_file)
-                    st.session_state.current_image = current_image
+                    original_image = Image.open(uploaded_file)
+                    st.session_state.original_image = original_image
+                    
+                    # If no current edited image exists, set it to the original
+                    if 'current_image' not in st.session_state:
+                        st.session_state.current_image = original_image.copy()
+                    
+                    current_image = st.session_state.current_image
                     st.success("✅ Image uploaded successfully!")
+                    
+                    # Image editing controls
+                    st.markdown("#### 🎨 Image Editing")
+                    
+                    # Get original dimensions
+                    orig_width, orig_height = original_image.size
+                    
+                    # Image size info
+                    st.caption(f"📏 Original size: {orig_width}×{orig_height} pixels")
+                    
+                    # Create tabs for different editing options
+                    edit_tab1, edit_tab2, edit_tab3 = st.tabs(["🔧 Resize", "✂️ Crop", "📥 Download"])
+                    
+                    with edit_tab1:
+                        st.subheader("Resize Image")
+                        
+                        # Resize method selection
+                        resize_method = st.radio(
+                            "Resize method:",
+                            ["Percentage", "Fixed Dimensions", "Social Media Presets"],
+                            horizontal=True
+                        )
+                        
+                        if resize_method == "Percentage":
+                            resize_percent = st.slider(
+                                "Resize percentage:",
+                                min_value=10,
+                                max_value=200,
+                                value=100,
+                                step=5,
+                                help="100% = original size"
+                            )
+                            
+                            new_width = int(orig_width * resize_percent / 100)
+                            new_height = int(orig_height * resize_percent / 100)
+                            
+                        elif resize_method == "Fixed Dimensions":
+                            col_w, col_h = st.columns(2)
+                            with col_w:
+                                new_width = st.number_input(
+                                    "Width (pixels):",
+                                    min_value=50,
+                                    max_value=5000,
+                                    value=orig_width,
+                                    step=10
+                                )
+                            with col_h:
+                                new_height = st.number_input(
+                                    "Height (pixels):",
+                                    min_value=50,
+                                    max_value=5000,
+                                    value=orig_height,
+                                    step=10
+                                )
+                            
+                            maintain_ratio = st.checkbox(
+                                "Maintain aspect ratio",
+                                value=True,
+                                help="Keep original proportions"
+                            )
+                            
+                            if maintain_ratio:
+                                # Calculate based on width change
+                                ratio = new_width / orig_width
+                                new_height = int(orig_height * ratio)
+                                st.caption(f"Adjusted height: {new_height}px (maintaining ratio)")
+                        
+                        else:  # Social Media Presets
+                            preset_options = {
+                                "Instagram Square (1080×1080)": (1080, 1080),
+                                "Instagram Portrait (1080×1350)": (1080, 1350),
+                                "Instagram Story (1080×1920)": (1080, 1920),
+                                "Facebook Post (1200×630)": (1200, 630),
+                                "Facebook Cover (1640×859)": (1640, 859),
+                                "LinkedIn Post (1200×627)": (1200, 627),
+                                "Twitter Post (1024×512)": (1024, 512),
+                                "YouTube Thumbnail (1280×720)": (1280, 720)
+                            }
+                            
+                            selected_preset = st.selectbox(
+                                "Choose preset:",
+                                list(preset_options.keys())
+                            )
+                            
+                            new_width, new_height = preset_options[selected_preset]
+                        
+                        # Show new dimensions and apply button
+                        st.info(f"New size will be: {new_width}×{new_height} pixels")
+                        
+                        if st.button("🔧 Apply Resize", type="primary"):
+                            try:
+                                resized_image = original_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                                st.session_state.current_image = resized_image
+                                current_image = resized_image
+                                st.success(f"✅ Image resized to {new_width}×{new_height}")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error resizing image: {str(e)}")
+                    
+                    with edit_tab2:
+                        st.subheader("Crop Image")
+                        
+                        current_width, current_height = current_image.size
+                        
+                        # Crop parameters
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            crop_left = st.number_input(
+                                "Left margin (px):",
+                                min_value=0,
+                                max_value=current_width-50,
+                                value=0,
+                                step=10
+                            )
+                            crop_top = st.number_input(
+                                "Top margin (px):",
+                                min_value=0,
+                                max_value=current_height-50,
+                                value=0,
+                                step=10
+                            )
+                        
+                        with col2:
+                            crop_right = st.number_input(
+                                "Right margin (px):",
+                                min_value=crop_left+50,
+                                max_value=current_width,
+                                value=current_width,
+                                step=10
+                            )
+                            crop_bottom = st.number_input(
+                                "Bottom margin (px):",
+                                min_value=crop_top+50,
+                                max_value=current_height,
+                                value=current_height,
+                                step=10
+                            )
+                        
+                        # Quick crop presets
+                        st.markdown("**Quick Crop Presets:**")
+                        preset_col1, preset_col2, preset_col3 = st.columns(3)
+                        
+                        with preset_col1:
+                            if st.button("Square Center"):
+                                # Crop to square from center
+                                size = min(current_width, current_height)
+                                crop_left = (current_width - size) // 2
+                                crop_top = (current_height - size) // 2
+                                crop_right = crop_left + size
+                                crop_bottom = crop_top + size
+                        
+                        with preset_col2:
+                            if st.button("Remove 10% Border"):
+                                # Remove 10% from each side
+                                margin_x = int(current_width * 0.1)
+                                margin_y = int(current_height * 0.1)
+                                crop_left = margin_x
+                                crop_top = margin_y
+                                crop_right = current_width - margin_x
+                                crop_bottom = current_height - margin_y
+                        
+                        with preset_col3:
+                            if st.button("Reset to Full"):
+                                crop_left = 0
+                                crop_top = 0
+                                crop_right = current_width
+                                crop_bottom = current_height
+                        
+                        # Show crop dimensions
+                        crop_width = crop_right - crop_left
+                        crop_height = crop_bottom - crop_top
+                        st.info(f"Cropped size will be: {crop_width}×{crop_height} pixels")
+                        
+                        if st.button("✂️ Apply Crop", type="primary"):
+                            try:
+                                cropped_image = current_image.crop((crop_left, crop_top, crop_right, crop_bottom))
+                                st.session_state.current_image = cropped_image
+                                current_image = cropped_image
+                                st.success(f"✅ Image cropped to {crop_width}×{crop_height}")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error cropping image: {str(e)}")
+                    
+                    with edit_tab3:
+                        st.subheader("Download Options")
+                        
+                        # Format selection
+                        download_format = st.selectbox(
+                            "Download format:",
+                            ["PNG (Best Quality)", "JPEG (Smaller Size)", "WebP (Modern)"]
+                        )
+                        
+                        # Quality setting for JPEG
+                        if "JPEG" in download_format:
+                            jpeg_quality = st.slider(
+                                "JPEG Quality:",
+                                min_value=50,
+                                max_value=100,
+                                value=90,
+                                help="Higher = better quality, larger file"
+                            )
+                        
+                        # File name
+                        default_name = f"edited_image_{datetime.now().strftime('%Y%m%d_%H%M')}"
+                        filename = st.text_input(
+                            "File name (without extension):",
+                            value=default_name
+                        )
+                        
+                        # Prepare download
+                        format_map = {
+                            "PNG (Best Quality)": ("PNG", "png"),
+                            "JPEG (Smaller Size)": ("JPEG", "jpg"),
+                            "WebP (Modern)": ("WebP", "webp")
+                        }
+                        
+                        format_key, extension = format_map[download_format]
+                        
+                        # Create download buffer
+                        img_buffer = io.BytesIO()
+                        
+                        if format_key == "JPEG":
+                            # Convert to RGB if necessary for JPEG
+                            if current_image.mode in ('RGBA', 'LA', 'P'):
+                                # Create white background
+                                rgb_image = Image.new('RGB', current_image.size, (255, 255, 255))
+                                if current_image.mode == 'P':
+                                    current_image = current_image.convert('RGBA')
+                                rgb_image.paste(current_image, mask=current_image.split()[-1] if current_image.mode == 'RGBA' else None)
+                                current_image.save(img_buffer, format=format_key, quality=jpeg_quality)
+                            else:
+                                current_image.save(img_buffer, format=format_key, quality=jpeg_quality)
+                        else:
+                            current_image.save(img_buffer, format=format_key)
+                        
+                        img_buffer.seek(0)
+                        
+                        # Show file info
+                        file_size = len(img_buffer.getvalue()) / 1024  # KB
+                        current_size = current_image.size
+                        st.info(f"📄 File size: {file_size:.1f} KB | Dimensions: {current_size[0]}×{current_size[1]} pixels")
+                        
+                        # Download button
+                        st.download_button(
+                            label=f"📥 Download as {format_key}",
+                            data=img_buffer.getvalue(),
+                            file_name=f"{filename}.{extension}",
+                            mime=f"image/{extension}",
+                            type="primary",
+                            use_container_width=True
+                        )
+                        
+                        # Reset to original button
+                        if st.button("🔄 Reset to Original", type="secondary", use_container_width=True):
+                            st.session_state.current_image = st.session_state.original_image.copy()
+                            st.success("✅ Reset to original image")
+                            st.rerun()
             
             elif image_source == "From Website":
                 if st.session_state.get('website_analysis'):
@@ -1891,8 +2154,13 @@ def handle_single_page_layout(template_config):
                             try:
                                 img_url = website_images[selected_img_idx]['url']
                                 response = requests.get(img_url, timeout=10)
-                                current_image = Image.open(io.BytesIO(response.content))
-                                st.session_state.current_image = current_image
+                                website_image = Image.open(io.BytesIO(response.content))
+                                
+                                # Store both original and current versions
+                                st.session_state.original_image = website_image.copy()
+                                st.session_state.current_image = website_image.copy()
+                                current_image = website_image
+                                
                                 st.success("✅ Website image loaded!")
                             except Exception as e:
                                 st.error(f"Failed to load image: {str(e)}")
@@ -1906,10 +2174,42 @@ def handle_single_page_layout(template_config):
             
             # Display current image
             if current_image:
-                st.image(current_image, caption="Current Image", use_container_width=True)
-                if st.button("🗑️ Clear Image"):
-                    st.session_state.current_image = None
-                    st.rerun()
+                st.markdown("#### 🖼️ Current Image Preview")
+                
+                # Display image in a more compact way
+                img_col, info_col = st.columns([2, 1])
+                
+                with img_col:
+                    # Display with limited width for better layout
+                    st.image(current_image, caption="Current Image", width=300)
+                
+                with info_col:
+                    # Show image information
+                    width, height = current_image.size
+                    st.metric("Width", f"{width}px")
+                    st.metric("Height", f"{height}px")
+                    
+                    # File size estimation
+                    img_buffer = io.BytesIO()
+                    current_image.save(img_buffer, format='PNG')
+                    file_size = len(img_buffer.getvalue()) / 1024  # KB
+                    st.metric("Est. Size", f"{file_size:.1f} KB")
+                    
+                    # Quick actions
+                    if st.button("🗑️ Clear Image", use_container_width=True):
+                        # Clear both current and original images
+                        if 'current_image' in st.session_state:
+                            del st.session_state.current_image
+                        if 'original_image' in st.session_state:
+                            del st.session_state.original_image
+                        st.rerun()
+                    
+                    # Show if image has been edited
+                    if ('original_image' in st.session_state and 
+                        st.session_state.original_image.size != current_image.size):
+                        st.caption("✂️ Image has been edited")
+                    elif 'original_image' in st.session_state:
+                        st.caption("📷 Original image")
         else:
             st.info("📝 **Text-Only Mode:** Captions will be generated without image references.")
     
