@@ -25,7 +25,7 @@ import streamlit as st
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from openai import OpenAI
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 from urllib.parse import urljoin, urlparse
 
 # === Constants ===
@@ -356,6 +356,214 @@ def export_caption_history():
         ])
     
     return output.getvalue()
+
+# === Template System for Social Media Posts ===
+def get_post_templates():
+    """Get predefined templates for different social media platforms and post types."""
+    return {
+        "Instagram": {
+            "Product Showcase": {
+                "prompt_template": "Create an engaging Instagram post for {business} showcasing {product_name}. Include relevant hashtags, call-to-action, and trendy language. Focus on visual appeal and lifestyle benefits.",
+                "hashtag_suggestions": ["#product", "#lifestyle", "#quality", "#style", "#trending"],
+                "cta_examples": ["Shop now!", "Link in bio!", "DM for details!", "Swipe up!"],
+                "best_practices": ["Use 3-5 hashtags", "Include call-to-action", "Ask questions to boost engagement", "Tag relevant accounts"]
+            },
+            "Behind the Scenes": {
+                "prompt_template": "Create a behind-the-scenes Instagram post for {business}. Show the process, team, or workspace. Make it authentic and relatable with appropriate hashtags.",
+                "hashtag_suggestions": ["#behindthescenes", "#process", "#team", "#authentic", "#workspace"],
+                "cta_examples": ["What do you think?", "Any questions?", "Follow for more!", "Share your thoughts!"],
+                "best_practices": ["Be authentic", "Show personality", "Include team members", "Explain your process"]
+            },
+            "Quote/Motivation": {
+                "prompt_template": "Create an inspirational Instagram post for {business} with a motivational quote or message. Include relevant industry wisdom and encouraging hashtags.",
+                "hashtag_suggestions": ["#motivation", "#inspiration", "#success", "#mindset", "#goals"],
+                "cta_examples": ["What motivates you?", "Share this with someone!", "Tag a friend!", "Double tap if you agree!"],
+                "best_practices": ["Use inspiring imagery", "Keep text readable", "Make it shareable", "Connect to your brand values"]
+            },
+            "Story/Carousel": {
+                "prompt_template": "Create an Instagram carousel/story post for {business}. Include multiple slides worth of content with tips, steps, or educational content.",
+                "hashtag_suggestions": ["#tips", "#education", "#howto", "#carousel", "#learn"],
+                "cta_examples": ["Swipe for more!", "Save this post!", "Try this at home!", "Which tip is your favorite?"],
+                "best_practices": ["Create visual consistency", "Number your slides", "Include a summary slide", "Encourage saves"]
+            }
+        },
+        "Facebook": {
+            "Business Update": {
+                "prompt_template": "Create a Facebook business update for {business}. Share news, achievements, or changes in a professional yet friendly tone. Include community engagement elements.",
+                "hashtag_suggestions": ["#businessupdate", "#news", "#community", "#achievement"],
+                "cta_examples": ["Learn more on our website", "Contact us for details", "What are your thoughts?", "Share with friends!"],
+                "best_practices": ["Longer form content works", "Include links", "Encourage comments", "Share personal stories"]
+            },
+            "Event Promotion": {
+                "prompt_template": "Create a Facebook event promotion post for {business}. Include event details, benefits of attending, and create excitement. Add clear next steps.",
+                "hashtag_suggestions": ["#event", "#join", "#community", "#networking", "#learning"],
+                "cta_examples": ["Register now!", "See you there!", "Mark your calendar!", "Invite your friends!"],
+                "best_practices": ["Include event details", "Create urgency", "Show social proof", "Make registration easy"]
+            },
+            "Educational/Tips": {
+                "prompt_template": "Create an educational Facebook post for {business}. Share valuable tips, insights, or how-to content that helps your audience. Make it informative and actionable.",
+                "hashtag_suggestions": ["#tips", "#education", "#howto", "#advice", "#helpful"],
+                "cta_examples": ["Try this tip!", "What's your experience?", "Share your own tips!", "Bookmark for later!"],
+                "best_practices": ["Provide real value", "Use numbered lists", "Include examples", "Encourage discussion"]
+            }
+        },
+        "LinkedIn": {
+            "Professional Insight": {
+                "prompt_template": "Create a professional LinkedIn post for {business}. Share industry insights, thought leadership, or professional experience. Maintain authoritative and networking-friendly tone.",
+                "hashtag_suggestions": ["#professional", "#industry", "#leadership", "#networking", "#business"],
+                "cta_examples": ["What's your take?", "Connect with me!", "Interested in learning more?", "Let's discuss in comments!"],
+                "best_practices": ["Professional tone", "Share expertise", "Ask thoughtful questions", "Network actively"]
+            },
+            "Company Achievement": {
+                "prompt_template": "Create a LinkedIn company achievement post for {business}. Celebrate milestones, awards, team success, or growth in a professional manner.",
+                "hashtag_suggestions": ["#achievement", "#milestone", "#team", "#success", "#growth"],
+                "cta_examples": ["Proud of our team!", "Thank you for your support!", "Onward and upward!", "Grateful for this recognition!"],
+                "best_practices": ["Credit team members", "Show gratitude", "Include metrics", "Tag relevant people"]
+            },
+            "Industry News": {
+                "prompt_template": "Create a LinkedIn industry news commentary for {business}. Share thoughts on recent industry developments, trends, or news with professional analysis.",
+                "hashtag_suggestions": ["#industryNEWS", "#trends", "#analysis", "#future", "#innovation"],
+                "cta_examples": ["What are your thoughts?", "How do you see this impacting us?", "Interested in discussing?", "What's your prediction?"],
+                "best_practices": ["Add your perspective", "Cite sources", "Encourage professional discussion", "Show expertise"]
+            }
+        },
+        "Twitter": {
+            "Quick Update": {
+                "prompt_template": "Create a concise Twitter update for {business}. Keep it under 280 characters, include relevant hashtags, and make it engaging for retweets.",
+                "hashtag_suggestions": ["#update", "#news", "#quick", "#twitter"],
+                "cta_examples": ["RT if you agree!", "Thoughts?", "What do you think?", "Share your experience!"],
+                "best_practices": ["Stay under 280 characters", "Use trending hashtags", "Include multimedia", "Time posts well"]
+            },
+            "Engagement/Poll": {
+                "prompt_template": "Create a Twitter engagement post or poll question for {business}. Make it interactive, fun, and relevant to your audience.",
+                "hashtag_suggestions": ["#poll", "#question", "#engage", "#community"],
+                "cta_examples": ["Vote below!", "RT with your answer!", "What's your choice?", "This or that?"],
+                "best_practices": ["Ask simple questions", "Use Twitter polls", "Create controversy (respectfully)", "Reply to responses"]
+            }
+        },
+        "TikTok": {
+            "Trend Participation": {
+                "prompt_template": "Create a TikTok trend participation post for {business}. Adapt current trends to your brand, use trending sounds, and keep it fun and authentic.",
+                "hashtag_suggestions": ["#trending", "#fyp", "#viral", "#fun", "#authentic"],
+                "cta_examples": ["Try this trend!", "Duet with us!", "Share your version!", "Follow for more!"],
+                "best_practices": ["Follow current trends", "Use trending sounds", "Keep it short and snappy", "Be authentic"]
+            },
+            "Educational/Quick Tips": {
+                "prompt_template": "Create a quick educational TikTok for {business}. Share fast tips, hacks, or behind-the-scenes knowledge in an entertaining way.",
+                "hashtag_suggestions": ["#tips", "#hacks", "#learn", "#education", "#quicktips"],
+                "cta_examples": ["Save this tip!", "Try it out!", "Follow for more tips!", "Which tip worked for you?"],
+                "best_practices": ["Keep it under 60 seconds", "Use text overlays", "Fast-paced editing", "Include a hook"]
+            }
+        }
+    }
+
+def get_platform_specs():
+    """Get technical specifications for different social media platforms."""
+    return {
+        "Instagram": {
+            "image_sizes": {
+                "Square Post": "1080×1080px",
+                "Portrait Post": "1080×1350px", 
+                "Landscape Post": "1080×566px",
+                "Story": "1080×1920px",
+                "Reels": "1080×1920px"
+            },
+            "caption_limits": {
+                "Post": "2,200 characters",
+                "Story": "No character limit",
+                "Bio": "150 characters"
+            },
+            "hashtag_limits": {
+                "Posts": "30 hashtags max",
+                "Stories": "10 hashtags max",
+                "Recommended": "3-5 hashtags"
+            },
+            "best_posting_times": ["11 AM - 1 PM", "7 PM - 9 PM"],
+            "engagement_tips": ["Use Stories polls", "Ask questions", "Share user content", "Post consistently"]
+        },
+        "Facebook": {
+            "image_sizes": {
+                "Post Image": "1200×630px",
+                "Cover Photo": "1640×856px",
+                "Profile Picture": "170×170px",
+                "Event Cover": "1920×1080px"
+            },
+            "caption_limits": {
+                "Post": "63,206 characters",
+                "Bio": "101 characters"
+            },
+            "best_posting_times": ["1 PM - 3 PM", "6 PM - 9 PM"],
+            "engagement_tips": ["Post longer content", "Use Facebook Live", "Create events", "Share links"]
+        },
+        "LinkedIn": {
+            "image_sizes": {
+                "Post Image": "1200×627px",
+                "Cover Photo": "1584×396px",
+                "Profile Picture": "400×400px",
+                "Company Logo": "300×300px"
+            },
+            "caption_limits": {
+                "Post": "3,000 characters",
+                "Headline": "120 characters",
+                "Summary": "2,000 characters"
+            },
+            "best_posting_times": ["8 AM - 10 AM", "12 PM - 2 PM", "5 PM - 6 PM"],
+            "engagement_tips": ["Share industry insights", "Network actively", "Post during business hours", "Use professional tone"]
+        },
+        "Twitter": {
+            "image_sizes": {
+                "Tweet Image": "1200×675px",
+                "Header": "1500×500px",
+                "Profile Picture": "400×400px"
+            },
+            "caption_limits": {
+                "Tweet": "280 characters",
+                "Bio": "160 characters"
+            },
+            "best_posting_times": ["9 AM - 10 AM", "12 PM - 1 PM", "7 PM - 9 PM"],
+            "engagement_tips": ["Use trending hashtags", "Retweet and reply", "Join conversations", "Post frequently"]
+        },
+        "TikTok": {
+            "video_specs": {
+                "Aspect Ratio": "9:16 (vertical)",
+                "Resolution": "1080×1920px",
+                "Duration": "15 seconds - 10 minutes",
+                "File Size": "Up to 500MB"
+            },
+            "caption_limits": {
+                "Caption": "2,200 characters",
+                "Bio": "80 characters"
+            },
+            "best_posting_times": ["6 AM - 10 AM", "7 PM - 9 PM"],
+            "engagement_tips": ["Follow trends", "Use trending sounds", "Post consistently", "Engage with comments"]
+        }
+    }
+
+def apply_template(template_data, business_name, additional_params=None):
+    """Apply template with business-specific information."""
+    if not additional_params:
+        additional_params = {}
+    
+    # Add business name to parameters
+    params = {'business': business_name}
+    params.update(additional_params)
+    
+    # Format the template
+    try:
+        formatted_prompt = template_data['prompt_template'].format(**params)
+        return {
+            'prompt': formatted_prompt,
+            'hashtags': template_data.get('hashtag_suggestions', []),
+            'cta_examples': template_data.get('cta_examples', []),
+            'best_practices': template_data.get('best_practices', [])
+        }
+    except KeyError as e:
+        return {
+            'prompt': f"Create a social media post for {business_name}. " + template_data['prompt_template'],
+            'hashtags': template_data.get('hashtag_suggestions', []),
+            'cta_examples': template_data.get('cta_examples', []),
+            'best_practices': template_data.get('best_practices', [])
+        }
 
 # === Feedback & Statistics Tracking System ===
 def load_feedback_submissions():
@@ -1923,7 +2131,7 @@ def handle_single_page_layout(template_config):
                         st.caption(f"📏 Original size: {orig_width}×{orig_height} pixels")
                         
                         # Create tabs for different editing options
-                        edit_tab1, edit_tab2, edit_tab3 = st.tabs(["🔧 Resize", "✂️ Crop", "📥 Download"])
+                        edit_tab1, edit_tab2, edit_tab3, edit_tab4 = st.tabs(["🔧 Resize", "✂️ Crop", "🎨 Adjust", "📥 Download"])
                         
                         with edit_tab1:
                             st.subheader("Resize Image")
@@ -1988,8 +2196,8 @@ def handle_single_page_layout(template_config):
                                     "Facebook Cover (1640×859)": (1640, 859),
                                     "LinkedIn Post (1200×627)": (1200, 627),
                                     "Twitter Post (1024×512)": (1024, 512),
-                                "YouTube Thumbnail (1280×720)": (1280, 720)
-                            }
+                                    "YouTube Thumbnail (1280×720)": (1280, 720)
+                                }
                             
                             selected_preset = st.selectbox(
                                 "Choose preset:",
@@ -2103,6 +2311,136 @@ def handle_single_page_layout(template_config):
                                     st.error(f"Error cropping image: {str(e)}")
                     
                     with edit_tab3:
+                        st.subheader("🎨 Image Adjustments")
+                        
+                        # Get current image from session state
+                        current_adjust_image = current_image if current_image is not None else st.session_state.get('current_image')
+                        
+                        if current_adjust_image is None:
+                            st.warning("⚠️ No image available for adjustments. Please upload an image first.")
+                            st.info("💡 Try uploading an image in the 'Upload File' section above.")
+                        else:
+                            adj_col1, adj_col2 = st.columns(2)
+                            
+                            with adj_col1:
+                                st.markdown("**🔄 Rotation**")
+                                
+                                # Quick rotation buttons
+                                rot_col1, rot_col2, rot_col3, rot_col4 = st.columns(4)
+                                
+                                with rot_col1:
+                                    if st.button("↻ 90°", use_container_width=True):
+                                        try:
+                                            rotated_image = current_adjust_image.rotate(-90, expand=True)
+                                            st.session_state.current_image = rotated_image
+                                            st.success("✅ Rotated 90° clockwise")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error rotating image: {str(e)}")
+                                
+                                with rot_col2:
+                                    if st.button("↺ -90°", use_container_width=True):
+                                        try:
+                                            rotated_image = current_adjust_image.rotate(90, expand=True)
+                                            st.session_state.current_image = rotated_image
+                                            st.success("✅ Rotated 90° counter-clockwise")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error rotating image: {str(e)}")
+                                
+                                with rot_col3:
+                                    if st.button("↻ 180°", use_container_width=True):
+                                        try:
+                                            rotated_image = current_adjust_image.rotate(180, expand=True)
+                                            st.session_state.current_image = rotated_image
+                                            st.success("✅ Rotated 180°")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error rotating image: {str(e)}")
+                                
+                                with rot_col4:
+                                    if st.button("🔄 Flip H", use_container_width=True):
+                                        try:
+                                            flipped_image = current_adjust_image.transpose(Image.FLIP_LEFT_RIGHT)
+                                            st.session_state.current_image = flipped_image
+                                            st.success("✅ Flipped horizontally")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error flipping image: {str(e)}")
+                                
+                                # Custom rotation
+                                st.markdown("**Custom Angle:**")
+                                custom_angle = st.slider(
+                                    "Rotation angle (degrees):",
+                                    min_value=-180,
+                                    max_value=180,
+                                    value=0,
+                                    step=1,
+                                    help="Positive values rotate clockwise"
+                                )
+                                
+                                if st.button("🔄 Apply Custom Rotation", type="secondary", use_container_width=True):
+                                    if custom_angle != 0:
+                                        try:
+                                            rotated_image = current_adjust_image.rotate(-custom_angle, expand=True, fillcolor='white')
+                                            st.session_state.current_image = rotated_image
+                                            st.success(f"✅ Rotated {custom_angle}°")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error rotating image: {str(e)}")
+                                    else:
+                                        st.info("💡 Angle is 0°, no rotation needed")
+                            
+                            with adj_col2:
+                                st.markdown("**🌟 Filters & Effects**")
+                                
+                                # Filter options
+                                filter_option = st.selectbox(
+                                    "Choose filter:",
+                                    ["None", "Grayscale", "Sepia", "High Contrast", "Soft Blur"]
+                                )
+                                
+                                if st.button("✨ Apply Filter", type="secondary", use_container_width=True):
+                                    if filter_option != "None":
+                                        try:
+                                            filtered_image = current_adjust_image.copy()
+                                            
+                                            if filter_option == "Grayscale":
+                                                filtered_image = filtered_image.convert('L').convert('RGB')
+                                            
+                                            elif filter_option == "Sepia":
+                                                # Convert to grayscale first
+                                                grayscale = filtered_image.convert('L')
+                                                # Create sepia effect by blending with brown
+                                                sepia = Image.new('RGB', filtered_image.size, (210, 180, 140))
+                                                filtered_image = Image.blend(Image.new('RGB', filtered_image.size, (255, 255, 255)), sepia, 0.3)
+                                                filtered_image = Image.blend(filtered_image, grayscale.convert('RGB'), 0.7)
+                                            
+                                            elif filter_option == "High Contrast":
+                                                # Enhance contrast
+                                                enhancer = ImageEnhance.Contrast(filtered_image)
+                                                filtered_image = enhancer.enhance(1.5)
+                                            
+                                            elif filter_option == "Soft Blur":
+                                                # Apply slight blur
+                                                filtered_image = filtered_image.filter(ImageFilter.BLUR)
+                                            
+                                            st.session_state.current_image = filtered_image
+                                            st.success(f"✅ Applied {filter_option} filter")
+                                            st.rerun()
+                                            
+                                        except Exception as e:
+                                            st.error(f"Error applying filter: {str(e)}")
+                                    else:
+                                        st.info("💡 No filter selected")
+                                
+                                # Preview current image
+                                st.markdown("**Preview:**")
+                                preview_img = current_adjust_image.copy()
+                                preview_img.thumbnail((150, 150), Image.Resampling.LANCZOS)
+                                st.image(preview_img, caption="Current Image")
+                    
+                    with edit_tab4:
                         st.subheader("Download Options")
                         
                         # Get current image from session state to ensure it's up to date
@@ -2200,23 +2538,191 @@ def handle_single_page_layout(template_config):
                 )
                 
                 if uploaded_files:
-                    # Store batch images in session state
+                    # File validation settings
+                    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+                    MIN_RESOLUTION = (100, 100)  # Minimum 100x100 pixels
+                    MAX_RESOLUTION = (10000, 10000)  # Maximum 10000x10000 pixels
+                    ALLOWED_FORMATS = ['PNG', 'JPEG', 'JPG', 'WEBP']
+                    
+                    # Validate and process files
                     batch_images = []
-                    for uploaded_file in uploaded_files:
-                        image = Image.open(uploaded_file)
-                        batch_images.append({
-                            'image': image,
-                            'filename': uploaded_file.name,
-                            'size': image.size
-                        })
+                    validation_errors = []
+                    processing_warnings = []
                     
-                    st.session_state.batch_images = batch_images
-                    st.success(f"✅ {len(uploaded_files)} images uploaded successfully!")
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
                     
-                    # Display batch images preview
-                    st.markdown("#### 🖼️ Batch Images Preview")
+                    for idx, uploaded_file in enumerate(uploaded_files):
+                        try:
+                            # Update progress
+                            progress = (idx + 1) / len(uploaded_files)
+                            progress_bar.progress(progress)
+                            status_text.text(f"Processing {uploaded_file.name}... ({idx + 1}/{len(uploaded_files)})")
+                            
+                            # File size validation
+                            file_size = uploaded_file.size
+                            if file_size > MAX_FILE_SIZE:
+                                validation_errors.append(f"❌ {uploaded_file.name}: File too large ({file_size / 1024 / 1024:.1f}MB > 50MB)")
+                                continue
+                            
+                            if file_size < 1024:  # Less than 1KB
+                                validation_errors.append(f"❌ {uploaded_file.name}: File too small ({file_size} bytes)")
+                                continue
+                            
+                            # Try to open and validate image
+                            try:
+                                image = Image.open(uploaded_file)
+                                
+                                # Format validation
+                                if image.format not in ALLOWED_FORMATS:
+                                    validation_errors.append(f"❌ {uploaded_file.name}: Unsupported format ({image.format})")
+                                    continue
+                                
+                                # Resolution validation
+                                width, height = image.size
+                                if width < MIN_RESOLUTION[0] or height < MIN_RESOLUTION[1]:
+                                    validation_errors.append(f"❌ {uploaded_file.name}: Resolution too low ({width}×{height} < {MIN_RESOLUTION[0]}×{MIN_RESOLUTION[1]})")
+                                    continue
+                                
+                                if width > MAX_RESOLUTION[0] or height > MAX_RESOLUTION[1]:
+                                    processing_warnings.append(f"⚠️ {uploaded_file.name}: Very high resolution ({width}×{height}), may slow processing")
+                                
+                                # Color mode validation and conversion
+                                original_mode = image.mode
+                                if image.mode not in ['RGB', 'RGBA']:
+                                    image = image.convert('RGB')
+                                    processing_warnings.append(f"ℹ️ {uploaded_file.name}: Converted from {original_mode} to RGB")
+                                
+                                # Check for animated images
+                                is_animated = hasattr(image, 'is_animated') and image.is_animated
+                                if is_animated:
+                                    processing_warnings.append(f"ℹ️ {uploaded_file.name}: Animated image detected, using first frame")
+                                    image.seek(0)  # Use first frame
+                                
+                                # Calculate file info
+                                megapixels = (width * height) / 1000000
+                                aspect_ratio = width / height
+                                
+                                batch_images.append({
+                                    'image': image,
+                                    'filename': uploaded_file.name,
+                                    'size': image.size,
+                                    'file_size': file_size,
+                                    'format': image.format,
+                                    'mode': image.mode,
+                                    'megapixels': megapixels,
+                                    'aspect_ratio': aspect_ratio,
+                                    'original_mode': original_mode
+                                })
+                                
+                            except Exception as img_error:
+                                validation_errors.append(f"❌ {uploaded_file.name}: Invalid image file ({str(img_error)})")
+                                continue
+                                
+                        except Exception as file_error:
+                            validation_errors.append(f"❌ {uploaded_file.name}: Processing error ({str(file_error)})")
+                            continue
                     
-                    # Create grid layout for previews
+                    # Clear progress indicators
+                    progress_bar.empty()
+                    status_text.empty()
+                    
+                    # Display validation results
+                    if batch_images:
+                        st.success(f"✅ {len(batch_images)} images processed successfully!")
+                        st.session_state.batch_images = batch_images
+                        
+                        # Show batch statistics
+                        with st.expander("📊 Batch Statistics", expanded=False):
+                            stat_col1, stat_col2, stat_col3 = st.columns(3)
+                            
+                            with stat_col1:
+                                total_size = sum(img['file_size'] for img in batch_images) / 1024 / 1024
+                                st.metric("Total Size", f"{total_size:.1f} MB")
+                                
+                                formats = [img['format'] for img in batch_images]
+                                format_counts = {fmt: formats.count(fmt) for fmt in set(formats)}
+                                st.write("**Formats:**")
+                                for fmt, count in format_counts.items():
+                                    st.write(f"• {fmt}: {count}")
+                            
+                            with stat_col2:
+                                avg_megapixels = sum(img['megapixels'] for img in batch_images) / len(batch_images)
+                                st.metric("Avg Resolution", f"{avg_megapixels:.1f} MP")
+                                
+                                resolutions = [f"{img['size'][0]}×{img['size'][1]}" for img in batch_images]
+                                unique_resolutions = len(set(resolutions))
+                                st.metric("Unique Sizes", unique_resolutions)
+                            
+                            with stat_col3:
+                                aspect_ratios = [img['aspect_ratio'] for img in batch_images]
+                                avg_aspect = sum(aspect_ratios) / len(aspect_ratios)
+                                st.metric("Avg Aspect Ratio", f"{avg_aspect:.2f}:1")
+                                
+                                color_modes = [img['mode'] for img in batch_images]
+                                mode_counts = {mode: color_modes.count(mode) for mode in set(color_modes)}
+                                st.write("**Color Modes:**")
+                                for mode, count in mode_counts.items():
+                                    st.write(f"• {mode}: {count}")
+                    
+                    # Display validation errors
+                    if validation_errors:
+                        st.error("⚠️ **Validation Errors:**")
+                        for error in validation_errors:
+                            st.write(error)
+                    
+                    # Display processing warnings
+                    if processing_warnings:
+                        st.warning("ℹ️ **Processing Notes:**")
+                        for warning in processing_warnings:
+                            st.write(warning)
+                    
+                    # If no valid images
+                    if not batch_images and uploaded_files:
+                        st.error("❌ No valid images could be processed. Please check the files and try again.")
+                        st.info("**Requirements:**\n• File size: 1KB - 50MB\n• Formats: PNG, JPEG, WebP\n• Resolution: 100×100 - 10000×10000 pixels\n• Valid image file (not corrupted)")
+                
+                # Only show batch management if there are valid images
+                if hasattr(st.session_state, 'batch_images') and st.session_state.batch_images:
+                    batch_images = st.session_state.batch_images
+                    
+                    # Display batch images preview with management
+                    st.markdown("#### 🖼️ Batch Images Management")
+                    
+                    # Batch management buttons
+                    batch_mgmt_col1, batch_mgmt_col2, batch_mgmt_col3 = st.columns(3)
+                    
+                    with batch_mgmt_col1:
+                        if st.button("🗑️ Clear All Images", type="secondary"):
+                            # Clear batch images and related data
+                            if 'batch_images' in st.session_state:
+                                del st.session_state['batch_images']
+                            if 'selected_batch_image' in st.session_state:
+                                del st.session_state['selected_batch_image']
+                            if 'current_image' in st.session_state:
+                                del st.session_state['current_image']
+                            if 'original_image' in st.session_state:
+                                del st.session_state['original_image']
+                            if 'generated_captions' in st.session_state:
+                                del st.session_state['generated_captions']
+                            if 'is_batch_result' in st.session_state:
+                                del st.session_state['is_batch_result']
+                            st.success("✅ All batch images cleared!")
+                            st.rerun()
+                    
+                    with batch_mgmt_col2:
+                        total_size = sum(img['image'].size[0] * img['image'].size[1] for img in batch_images)
+                        st.metric("Total Images", len(batch_images))
+                    
+                    with batch_mgmt_col3:
+                        avg_resolution = f"{int(total_size / len(batch_images) / 1000000):.1f}MP avg" if batch_images else "0MP"
+                        st.metric("Avg Resolution", avg_resolution)
+                    
+                    # Individual image management
+                    if 'images_to_remove' not in st.session_state:
+                        st.session_state.images_to_remove = []
+                    
+                    # Create grid layout for previews with individual controls
                     cols_per_row = 3
                     for i in range(0, len(batch_images), cols_per_row):
                         cols = st.columns(cols_per_row)
@@ -2227,11 +2733,34 @@ def handle_single_page_layout(template_config):
                                 img_data = batch_images[img_idx]
                                 
                                 with col:
+                                    # Image preview
                                     st.image(
                                         img_data['image'], 
                                         caption=f"{img_data['filename']}\n{img_data['size'][0]}×{img_data['size'][1]}px",
                                         use_container_width=True
                                     )
+                                    
+                                    # Individual controls
+                                    img_col1, img_col2 = st.columns(2)
+                                    
+                                    with img_col1:
+                                        if st.button(f"🗑️ Remove", key=f"remove_{img_idx}"):
+                                            batch_images.pop(img_idx)
+                                            st.session_state.batch_images = batch_images
+                                            st.rerun()
+                                    
+                                    with img_col2:
+                                        if st.button(f"👁️ Preview", key=f"preview_{img_idx}"):
+                                            st.session_state.current_image = img_data['image']
+                                            st.session_state.selected_batch_image = img_idx
+                    
+                    # Show currently selected image for editing
+                    if hasattr(st.session_state, 'selected_batch_image') and st.session_state.selected_batch_image is not None:
+                        if st.session_state.selected_batch_image < len(batch_images):
+                            selected_img = batch_images[st.session_state.selected_batch_image]
+                            st.info(f"🎯 Currently selected for editing: **{selected_img['filename']}**")
+                        else:
+                            st.session_state.selected_batch_image = None
                     
                     # Batch processing options
                     st.markdown("#### ⚙️ Batch Processing Options")
@@ -2298,13 +2827,80 @@ def handle_single_page_layout(template_config):
                                     
                                     # Apply resize if selected
                                     if resize_batch:
-                                        processed_img = processed_img.resize((batch_width, batch_height), Image.Resampling.LANCZOS)
+                                        try:
+                                            processed_img = processed_img.resize((batch_width, batch_height), Image.Resampling.LANCZOS)
+                                        except Exception as e:
+                                            st.warning(f"⚠️ Could not resize {img_data['filename']}: {str(e)}")
+                                            # Continue with original size
                                     
-                                    # Apply branding if selected (simplified implementation)
+                                    # Apply branding if selected
                                     if add_branding and brand_text:
-                                        # This would require PIL ImageDraw for text overlay
-                                        # For now, we'll just note it in the filename
-                                        pass
+                                        try:
+                                            # Create a copy for drawing
+                                            branded_img = processed_img.copy()
+                                            draw = ImageDraw.Draw(branded_img)
+                                            
+                                            # Calculate font size based on image dimensions
+                                            img_width, img_height = branded_img.size
+                                            font_size = max(12, min(img_width, img_height) // 40)
+                                            
+                                            try:
+                                                # Try to use a system font
+                                                font = ImageFont.truetype("arial.ttf", font_size)
+                                            except (OSError, IOError):
+                                                # Fallback to default font
+                                                font = ImageFont.load_default()
+                                            
+                                            # Get text dimensions
+                                            bbox = draw.textbbox((0, 0), brand_text, font=font)
+                                            text_width = bbox[2] - bbox[0]
+                                            text_height = bbox[3] - bbox[1]
+                                            
+                                            # Calculate position based on selected position
+                                            margin = 10
+                                            if brand_position == "Bottom Right":
+                                                position = (img_width - text_width - margin, img_height - text_height - margin)
+                                            elif brand_position == "Bottom Left":
+                                                position = (margin, img_height - text_height - margin)
+                                            elif brand_position == "Top Right":
+                                                position = (img_width - text_width - margin, margin)
+                                            elif brand_position == "Top Left":
+                                                position = (margin, margin)
+                                            else:  # Center
+                                                position = ((img_width - text_width) // 2, (img_height - text_height) // 2)
+                                            
+                                            # Add semi-transparent background for better readability
+                                            background_margin = 5
+                                            background_bbox = [
+                                                position[0] - background_margin,
+                                                position[1] - background_margin,
+                                                position[0] + text_width + background_margin,
+                                                position[1] + text_height + background_margin
+                                            ]
+                                            
+                                            # Draw semi-transparent background
+                                            overlay = Image.new('RGBA', branded_img.size, (0, 0, 0, 0))
+                                            overlay_draw = ImageDraw.Draw(overlay)
+                                            overlay_draw.rectangle(background_bbox, fill=(0, 0, 0, 128))
+                                            
+                                            # Composite the overlay
+                                            if branded_img.mode != 'RGBA':
+                                                branded_img = branded_img.convert('RGBA')
+                                            branded_img = Image.alpha_composite(branded_img, overlay)
+                                            
+                                            # Draw the text
+                                            final_draw = ImageDraw.Draw(branded_img)
+                                            final_draw.text(position, brand_text, font=font, fill=(255, 255, 255, 255))
+                                            
+                                            # Convert back to original mode if needed
+                                            if img_data['image'].mode != 'RGBA':
+                                                branded_img = branded_img.convert(img_data['image'].mode)
+                                            
+                                            processed_img = branded_img
+                                            
+                                        except Exception as e:
+                                            st.warning(f"⚠️ Could not add watermark to {img_data['filename']}: {str(e)}")
+                                            # Continue with the image without watermark
                                     
                                     processed_images.append({
                                         'image': processed_img,
@@ -2329,7 +2925,8 @@ def handle_single_page_layout(template_config):
                             # Clear all image and batch-related session state
                             image_keys_to_clear = [
                                 'batch_images', 'current_image', 'original_image',
-                                'generated_captions', 'is_batch_result', 'website_analysis'
+                                'generated_captions', 'is_batch_result', 'website_analysis',
+                                'selected_batch_image'
                             ]
                             cleared_count = 0
                             for key in image_keys_to_clear:
@@ -2339,9 +2936,9 @@ def handle_single_page_layout(template_config):
                             
                             if cleared_count > 0:
                                 st.success("✅ All images and data cleared!")
+                                st.rerun()
                             else:
                                 st.info("💡 No images to clear")
-                            st.rerun()
                     
                     with mgmt_col2:
                         if st.button("📊 Batch Summary", use_container_width=True):
@@ -2361,12 +2958,6 @@ def handle_single_page_layout(template_config):
                         # Quick batch operations
                         if st.button("🔄 Refresh Preview", use_container_width=True):
                             st.rerun()
-                    
-                    # Set current image to first in batch for preview
-                    if batch_images:
-                        current_image = batch_images[0]['image']
-                        st.session_state.current_image = current_image
-                        st.session_state.original_image = current_image.copy()
             
             elif image_source == "From Website":
                 if st.session_state.get('website_analysis'):
@@ -2447,8 +3038,10 @@ def handle_single_page_layout(template_config):
             elif image_source == "Clipboard":
                 st.info("💡 Clipboard feature not available. Please use file upload instead.")
             
-            # Display current image
-            if current_image:
+            # Display current image (but not in batch mode)
+            is_batch_mode = hasattr(st.session_state, 'batch_images') and st.session_state.batch_images
+            
+            if current_image and not is_batch_mode:
                 st.markdown("#### 🖼️ Current Image Preview")
                 
                 # Display image in a more compact way
@@ -2598,6 +3191,69 @@ def handle_single_page_layout(template_config):
     # SECTION 2: STYLE & CUSTOMIZATION
     # ========================================
     st.header("🎨 Style & Customization")
+    
+    # Template system integration
+    with st.expander("📋 Use Template (Optional)", expanded=False):
+        st.info("🚀 Select a pre-made template for different social media platforms and post types!")
+        
+        template_col1, template_col2 = st.columns(2)
+        
+        with template_col1:
+            selected_platform = st.selectbox(
+                "Platform:",
+                ["None", "Instagram", "Facebook", "LinkedIn", "Twitter", "TikTok"],
+                help="Choose the social media platform"
+            )
+        
+        with template_col2:
+            if selected_platform != "None":
+                templates = get_post_templates()
+                platform_templates = templates.get(selected_platform, {})
+                
+                selected_template = st.selectbox(
+                    "Post Type:",
+                    ["None"] + list(platform_templates.keys()),
+                    help="Choose the type of post you want to create"
+                )
+            else:
+                selected_template = "None"
+        
+        # Apply template if selected
+        template_applied = False
+        if selected_platform != "None" and selected_template != "None":
+            templates = get_post_templates()
+            template_data = templates[selected_platform][selected_template]
+            
+            # Show template information
+            st.success(f"📋 Template: {selected_platform} - {selected_template}")
+            
+            with st.container():
+                temp_col1, temp_col2 = st.columns(2)
+                
+                with temp_col1:
+                    st.write("**🏷️ Suggested Hashtags:**")
+                    for hashtag in template_data.get('hashtag_suggestions', []):
+                        st.caption(f"• {hashtag}")
+                
+                with temp_col2:
+                    st.write("**📢 Call-to-Action Examples:**")
+                    for cta in template_data.get('cta_examples', []):
+                        st.caption(f"• {cta}")
+                
+                st.write("**💡 Best Practices:**")
+                for practice in template_data.get('best_practices', []):
+                    st.caption(f"• {practice}")
+            
+            # Store template data for use in caption generation
+            st.session_state.selected_template = {
+                'platform': selected_platform,
+                'type': selected_template,
+                'data': template_data
+            }
+            template_applied = True
+        else:
+            if 'selected_template' in st.session_state:
+                del st.session_state['selected_template']
     
     style_col1, style_col2, style_col3 = st.columns(3)
     
@@ -2871,7 +3527,7 @@ def handle_single_page_layout(template_config):
         
         if is_batch_result:
             st.header("📝 Your Batch Generated Captions")
-            st.info("🚀 Captions generated for multiple images. Each image has its own set of captions below.")
+            st.info("🚀 Captions generated for multiple images. Each caption is in an editable text box - simply select all text (Ctrl+A) and copy (Ctrl+C) to use in your social media posts.")
             
             # Split batch results by image headers
             full_content = st.session_state.generated_captions
