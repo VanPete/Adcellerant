@@ -1907,9 +1907,8 @@ def handle_single_page_layout(template_config):
                     original_image = Image.open(uploaded_file)
                     st.session_state.original_image = original_image
                     
-                    # If no current edited image exists, set it to the original
-                    if 'current_image' not in st.session_state:
-                        st.session_state.current_image = original_image.copy()
+                    # Always update current_image to the newly uploaded image
+                    st.session_state.current_image = original_image.copy()
                     
                     current_image = st.session_state.current_image
                     st.success("✅ Image uploaded successfully!")
@@ -2016,10 +2015,12 @@ def handle_single_page_layout(template_config):
                         st.subheader("Crop Image")
                         
                         # Get current image from session state to ensure it's up to date
-                        current_edit_image = st.session_state.get('current_image')
+                        # Use the local current_image variable if available, otherwise get from session state
+                        current_edit_image = current_image if current_image is not None else st.session_state.get('current_image')
                         
                         if current_edit_image is None:
                             st.warning("⚠️ No image available for cropping. Please upload an image first.")
+                            st.info("💡 Try uploading an image in the 'Upload File' section above.")
                         else:
                             current_width, current_height = current_edit_image.size
                             
@@ -2105,10 +2106,12 @@ def handle_single_page_layout(template_config):
                         st.subheader("Download Options")
                         
                         # Get current image from session state to ensure it's up to date
-                        current_download_image = st.session_state.get('current_image')
+                        # Use the local current_image variable if available, otherwise get from session state
+                        current_download_image = current_image if current_image is not None else st.session_state.get('current_image')
                         
                         if current_download_image is None:
                             st.warning("⚠️ No image available for download. Please upload an image first.")
+                            st.info("💡 Try uploading an image in the 'Upload File' section above.")
                         else:
                             # Format selection
                             download_format = st.selectbox(
