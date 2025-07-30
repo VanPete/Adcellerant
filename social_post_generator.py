@@ -1913,81 +1913,81 @@ def handle_single_page_layout(template_config):
                     current_image = st.session_state.current_image
                     st.success("✅ Image uploaded successfully!")
                     
-                    # Image editing controls
-                    st.markdown("#### 🎨 Image Editing")
+                    # Image editing controls in a collapsible expander
+                    with st.expander("🎨 Image Editing & Processing", expanded=False):
                     
-                    # Get original dimensions
-                    orig_width, orig_height = original_image.size
-                    
-                    # Image size info
-                    st.caption(f"📏 Original size: {orig_width}×{orig_height} pixels")
-                    
-                    # Create tabs for different editing options
-                    edit_tab1, edit_tab2, edit_tab3 = st.tabs(["🔧 Resize", "✂️ Crop", "📥 Download"])
-                    
-                    with edit_tab1:
-                        st.subheader("Resize Image")
+                        # Get original dimensions
+                        orig_width, orig_height = original_image.size
                         
-                        # Resize method selection
-                        resize_method = st.radio(
-                            "Resize method:",
-                            ["Percentage", "Fixed Dimensions", "Social Media Presets"],
-                            horizontal=True
-                        )
+                        # Image size info
+                        st.caption(f"📏 Original size: {orig_width}×{orig_height} pixels")
                         
-                        if resize_method == "Percentage":
-                            resize_percent = st.slider(
-                                "Resize percentage:",
-                                min_value=10,
-                                max_value=200,
-                                value=100,
-                                step=5,
-                                help="100% = original size"
+                        # Create tabs for different editing options
+                        edit_tab1, edit_tab2, edit_tab3 = st.tabs(["🔧 Resize", "✂️ Crop", "📥 Download"])
+                        
+                        with edit_tab1:
+                            st.subheader("Resize Image")
+                            
+                            # Resize method selection
+                            resize_method = st.radio(
+                                "Resize method:",
+                                ["Percentage", "Fixed Dimensions", "Social Media Presets"],
+                                horizontal=True
                             )
                             
-                            new_width = int(orig_width * resize_percent / 100)
-                            new_height = int(orig_height * resize_percent / 100)
-                            
-                        elif resize_method == "Fixed Dimensions":
-                            col_w, col_h = st.columns(2)
-                            with col_w:
-                                new_width = st.number_input(
-                                    "Width (pixels):",
-                                    min_value=50,
-                                    max_value=5000,
-                                    value=orig_width,
-                                    step=10
+                            if resize_method == "Percentage":
+                                resize_percent = st.slider(
+                                    "Resize percentage:",
+                                    min_value=10,
+                                    max_value=200,
+                                    value=100,
+                                    step=5,
+                                    help="100% = original size"
                                 )
-                            with col_h:
-                                new_height = st.number_input(
-                                    "Height (pixels):",
-                                    min_value=50,
-                                    max_value=5000,
-                                    value=orig_height,
-                                    step=10
+                                
+                                new_width = int(orig_width * resize_percent / 100)
+                                new_height = int(orig_height * resize_percent / 100)
+                                
+                            elif resize_method == "Fixed Dimensions":
+                                col_w, col_h = st.columns(2)
+                                with col_w:
+                                    new_width = st.number_input(
+                                        "Width (pixels):",
+                                        min_value=50,
+                                        max_value=5000,
+                                        value=orig_width,
+                                        step=10
+                                    )
+                                with col_h:
+                                    new_height = st.number_input(
+                                        "Height (pixels):",
+                                        min_value=50,
+                                        max_value=5000,
+                                        value=orig_height,
+                                        step=10
+                                    )
+                                
+                                maintain_ratio = st.checkbox(
+                                    "Maintain aspect ratio",
+                                    value=True,
+                                    help="Keep original proportions"
                                 )
+                                
+                                if maintain_ratio:
+                                    # Calculate based on width change
+                                    ratio = new_width / orig_width
+                                    new_height = int(orig_height * ratio)
+                                    st.caption(f"Adjusted height: {new_height}px (maintaining ratio)")
                             
-                            maintain_ratio = st.checkbox(
-                                "Maintain aspect ratio",
-                                value=True,
-                                help="Keep original proportions"
-                            )
-                            
-                            if maintain_ratio:
-                                # Calculate based on width change
-                                ratio = new_width / orig_width
-                                new_height = int(orig_height * ratio)
-                                st.caption(f"Adjusted height: {new_height}px (maintaining ratio)")
-                        
-                        else:  # Social Media Presets
-                            preset_options = {
-                                "Instagram Square (1080×1080)": (1080, 1080),
-                                "Instagram Portrait (1080×1350)": (1080, 1350),
-                                "Instagram Story (1080×1920)": (1080, 1920),
-                                "Facebook Post (1200×630)": (1200, 630),
-                                "Facebook Cover (1640×859)": (1640, 859),
-                                "LinkedIn Post (1200×627)": (1200, 627),
-                                "Twitter Post (1024×512)": (1024, 512),
+                            else:  # Social Media Presets
+                                preset_options = {
+                                    "Instagram Square (1080×1080)": (1080, 1080),
+                                    "Instagram Portrait (1080×1350)": (1080, 1350),
+                                    "Instagram Story (1080×1920)": (1080, 1920),
+                                    "Facebook Post (1200×630)": (1200, 630),
+                                    "Facebook Cover (1640×859)": (1640, 859),
+                                    "LinkedIn Post (1200×627)": (1200, 627),
+                                    "Twitter Post (1024×512)": (1024, 512),
                                 "YouTube Thumbnail (1280×720)": (1280, 720)
                             }
                             
@@ -2516,7 +2516,7 @@ def handle_single_page_layout(template_config):
                 default_business = auto_filled_business
         
         website_url = st.text_input(
-            "🔗 Website URL (Optional)",
+            "🔗 Website URL",
             value=default_website,
             placeholder="https://yourcompany.com",
             help="Provide website URL for enhanced context and auto-fill business name",
