@@ -1984,161 +1984,175 @@ def handle_single_page_layout(template_config):
                     with edit_tab2:
                         st.subheader("Crop Image")
                         
-                        current_width, current_height = current_image.size
+                        # Get current image from session state to ensure it's up to date
+                        current_edit_image = st.session_state.get('current_image')
                         
-                        # Crop parameters
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            crop_left = st.number_input(
-                                "Left margin (px):",
-                                min_value=0,
-                                max_value=current_width-50,
-                                value=0,
-                                step=10
-                            )
-                            crop_top = st.number_input(
-                                "Top margin (px):",
-                                min_value=0,
-                                max_value=current_height-50,
-                                value=0,
-                                step=10
-                            )
-                        
-                        with col2:
-                            crop_right = st.number_input(
-                                "Right margin (px):",
-                                min_value=crop_left+50,
-                                max_value=current_width,
-                                value=current_width,
-                                step=10
-                            )
-                            crop_bottom = st.number_input(
-                                "Bottom margin (px):",
-                                min_value=crop_top+50,
-                                max_value=current_height,
-                                value=current_height,
-                                step=10
-                            )
-                        
-                        # Quick crop presets
-                        st.markdown("**Quick Crop Presets:**")
-                        preset_col1, preset_col2, preset_col3 = st.columns(3)
-                        
-                        with preset_col1:
-                            if st.button("Square Center"):
-                                # Crop to square from center
-                                size = min(current_width, current_height)
-                                crop_left = (current_width - size) // 2
-                                crop_top = (current_height - size) // 2
-                                crop_right = crop_left + size
-                                crop_bottom = crop_top + size
-                        
-                        with preset_col2:
-                            if st.button("Remove 10% Border"):
-                                # Remove 10% from each side
-                                margin_x = int(current_width * 0.1)
-                                margin_y = int(current_height * 0.1)
-                                crop_left = margin_x
-                                crop_top = margin_y
-                                crop_right = current_width - margin_x
-                                crop_bottom = current_height - margin_y
-                        
-                        with preset_col3:
-                            if st.button("Reset to Full"):
-                                crop_left = 0
-                                crop_top = 0
-                                crop_right = current_width
-                                crop_bottom = current_height
-                        
-                        # Show crop dimensions
-                        crop_width = crop_right - crop_left
-                        crop_height = crop_bottom - crop_top
-                        st.info(f"Cropped size will be: {crop_width}×{crop_height} pixels")
-                        
-                        if st.button("✂️ Apply Crop", type="primary"):
-                            try:
-                                cropped_image = current_image.crop((crop_left, crop_top, crop_right, crop_bottom))
-                                st.session_state.current_image = cropped_image
-                                current_image = cropped_image
-                                st.success(f"✅ Image cropped to {crop_width}×{crop_height}")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error cropping image: {str(e)}")
+                        if current_edit_image is None:
+                            st.warning("⚠️ No image available for cropping. Please upload an image first.")
+                        else:
+                            current_width, current_height = current_edit_image.size
+                            
+                            # Crop parameters
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                crop_left = st.number_input(
+                                    "Left margin (px):",
+                                    min_value=0,
+                                    max_value=current_width-50,
+                                    value=0,
+                                    step=10
+                                )
+                                crop_top = st.number_input(
+                                    "Top margin (px):",
+                                    min_value=0,
+                                    max_value=current_height-50,
+                                    value=0,
+                                    step=10
+                                )
+                            
+                            with col2:
+                                crop_right = st.number_input(
+                                    "Right margin (px):",
+                                    min_value=crop_left+50,
+                                    max_value=current_width,
+                                    value=current_width,
+                                    step=10
+                                )
+                                crop_bottom = st.number_input(
+                                    "Bottom margin (px):",
+                                    min_value=crop_top+50,
+                                    max_value=current_height,
+                                    value=current_height,
+                                    step=10
+                                )
+                            
+                            # Quick crop presets
+                            st.markdown("**Quick Crop Presets:**")
+                            preset_col1, preset_col2, preset_col3 = st.columns(3)
+                            
+                            with preset_col1:
+                                if st.button("Square Center"):
+                                    # Crop to square from center
+                                    size = min(current_width, current_height)
+                                    crop_left = (current_width - size) // 2
+                                    crop_top = (current_height - size) // 2
+                                    crop_right = crop_left + size
+                                    crop_bottom = crop_top + size
+                            
+                            with preset_col2:
+                                if st.button("Remove 10% Border"):
+                                    # Remove 10% from each side
+                                    margin_x = int(current_width * 0.1)
+                                    margin_y = int(current_height * 0.1)
+                                    crop_left = margin_x
+                                    crop_top = margin_y
+                                    crop_right = current_width - margin_x
+                                    crop_bottom = current_height - margin_y
+                            
+                            with preset_col3:
+                                if st.button("Reset to Full"):
+                                    crop_left = 0
+                                    crop_top = 0
+                                    crop_right = current_width
+                                    crop_bottom = current_height
+                            
+                            # Show crop dimensions
+                            crop_width = crop_right - crop_left
+                            crop_height = crop_bottom - crop_top
+                            st.info(f"Cropped size will be: {crop_width}×{crop_height} pixels")
+                            
+                            if st.button("✂️ Apply Crop", type="primary"):
+                                try:
+                                    cropped_image = current_edit_image.crop((crop_left, crop_top, crop_right, crop_bottom))
+                                    st.session_state.current_image = cropped_image
+                                    st.success(f"✅ Image cropped to {crop_width}×{crop_height}")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error cropping image: {str(e)}")
                     
                     with edit_tab3:
                         st.subheader("Download Options")
                         
-                        # Format selection
-                        download_format = st.selectbox(
-                            "Download format:",
-                            ["PNG (Best Quality)", "JPEG (Smaller Size)", "WebP (Modern)"]
-                        )
+                        # Get current image from session state to ensure it's up to date
+                        current_download_image = st.session_state.get('current_image')
                         
-                        # Quality setting for JPEG
-                        if "JPEG" in download_format:
-                            jpeg_quality = st.slider(
-                                "JPEG Quality:",
-                                min_value=50,
-                                max_value=100,
-                                value=90,
-                                help="Higher = better quality, larger file"
-                            )
-                        
-                        # File name
-                        default_name = f"edited_image_{datetime.now().strftime('%Y%m%d_%H%M')}"
-                        filename = st.text_input(
-                            "File name (without extension):",
-                            value=default_name
-                        )
-                        
-                        # Prepare download
-                        format_map = {
-                            "PNG (Best Quality)": ("PNG", "png"),
-                            "JPEG (Smaller Size)": ("JPEG", "jpg"),
-                            "WebP (Modern)": ("WebP", "webp")
-                        }
-                        
-                        format_key, extension = format_map[download_format]
-                        
-                        # Create download buffer
-                        img_buffer = io.BytesIO()
-                        
-                        if format_key == "JPEG":
-                            # Convert to RGB if necessary for JPEG
-                            if current_image.mode in ('RGBA', 'LA', 'P'):
-                                # Create white background
-                                rgb_image = Image.new('RGB', current_image.size, (255, 255, 255))
-                                if current_image.mode == 'P':
-                                    current_image = current_image.convert('RGBA')
-                                rgb_image.paste(current_image, mask=current_image.split()[-1] if current_image.mode == 'RGBA' else None)
-                                current_image.save(img_buffer, format=format_key, quality=jpeg_quality)
-                            else:
-                                current_image.save(img_buffer, format=format_key, quality=jpeg_quality)
+                        if current_download_image is None:
+                            st.warning("⚠️ No image available for download. Please upload an image first.")
                         else:
-                            current_image.save(img_buffer, format=format_key)
-                        
-                        img_buffer.seek(0)
-                        
-                        # Show file info
-                        file_size = len(img_buffer.getvalue()) / 1024  # KB
-                        current_size = current_image.size
-                        st.info(f"📄 File size: {file_size:.1f} KB | Dimensions: {current_size[0]}×{current_size[1]} pixels")
-                        
-                        # Download button
-                        st.download_button(
-                            label=f"📥 Download as {format_key}",
-                            data=img_buffer.getvalue(),
-                            file_name=f"{filename}.{extension}",
-                            mime=f"image/{extension}",
-                            type="primary",
-                            use_container_width=True
-                        )
-                        
-                        # Reset to original button
-                        if st.button("🔄 Reset to Original", type="secondary", use_container_width=True):
-                            st.session_state.current_image = st.session_state.original_image.copy()
-                            st.success("✅ Reset to original image")
-                            st.rerun()
+                            # Format selection
+                            download_format = st.selectbox(
+                                "Download format:",
+                                ["PNG (Best Quality)", "JPEG (Smaller Size)", "WebP (Modern)"]
+                            )
+                            
+                            # Quality setting for JPEG
+                            if "JPEG" in download_format:
+                                jpeg_quality = st.slider(
+                                    "JPEG Quality:",
+                                    min_value=50,
+                                    max_value=100,
+                                    value=90,
+                                    help="Higher = better quality, larger file"
+                                )
+                            
+                            # File name
+                            default_name = f"edited_image_{datetime.now().strftime('%Y%m%d_%H%M')}"
+                            filename = st.text_input(
+                                "File name (without extension):",
+                                value=default_name
+                            )
+                            
+                            # Prepare download
+                            format_map = {
+                                "PNG (Best Quality)": ("PNG", "png"),
+                                "JPEG (Smaller Size)": ("JPEG", "jpg"),
+                                "WebP (Modern)": ("WebP", "webp")
+                            }
+                            
+                            format_key, extension = format_map[download_format]
+                            
+                            # Create download buffer
+                            img_buffer = io.BytesIO()
+                            
+                            if format_key == "JPEG":
+                                # Convert to RGB if necessary for JPEG
+                                if current_download_image.mode in ('RGBA', 'LA', 'P'):
+                                    # Create white background
+                                    rgb_image = Image.new('RGB', current_download_image.size, (255, 255, 255))
+                                    if current_download_image.mode == 'P':
+                                        current_download_image = current_download_image.convert('RGBA')
+                                    rgb_image.paste(current_download_image, mask=current_download_image.split()[-1] if current_download_image.mode == 'RGBA' else None)
+                                    rgb_image.save(img_buffer, format=format_key, quality=jpeg_quality)
+                                else:
+                                    current_download_image.save(img_buffer, format=format_key, quality=jpeg_quality)
+                            else:
+                                current_download_image.save(img_buffer, format=format_key)
+                            
+                            img_buffer.seek(0)
+                            
+                            # Show file info
+                            file_size = len(img_buffer.getvalue()) / 1024  # KB
+                            current_size = current_download_image.size
+                            st.info(f"📄 File size: {file_size:.1f} KB | Dimensions: {current_size[0]}×{current_size[1]} pixels")
+                            
+                            # Download button
+                            st.download_button(
+                                label=f"📥 Download as {format_key}",
+                                data=img_buffer.getvalue(),
+                                file_name=f"{filename}.{extension}",
+                                mime=f"image/{extension}",
+                                type="primary",
+                                use_container_width=True
+                            )
+                            
+                            # Reset to original button
+                            if st.session_state.get('original_image') is not None:
+                                if st.button("🔄 Reset to Original", type="secondary", use_container_width=True):
+                                    st.session_state.current_image = st.session_state.original_image.copy()
+                                    st.success("✅ Reset to original image")
+                                    st.rerun()
+                            else:
+                                st.info("💡 No original image available to reset to")
             
             elif image_source == "From Website":
                 if st.session_state.get('website_analysis'):
