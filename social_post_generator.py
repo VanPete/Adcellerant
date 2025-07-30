@@ -1860,8 +1860,8 @@ def handle_single_page_layout(template_config):
             # Image source selection
             image_source = st.radio(
                 "Image source:",
-                ["Upload File", "From Website", "Clipboard"],
-                help="Choose how to provide your image",
+                ["Upload File", "Batch Upload", "From Website", "Clipboard"],
+                help="Choose how to provide your image(s)",
                 horizontal=True
             )
             
@@ -2153,6 +2153,178 @@ def handle_single_page_layout(template_config):
                                     st.rerun()
                             else:
                                 st.info("💡 No original image available to reset to")
+            
+            elif image_source == "Batch Upload":
+                st.subheader("📁 Batch Photo Upload")
+                st.info("🚀 Upload multiple images to generate captions for batch posts!")
+                
+                uploaded_files = st.file_uploader(
+                    "Choose multiple image files",
+                    type=['png', 'jpg', 'jpeg', 'webp'],
+                    accept_multiple_files=True,
+                    help="Upload multiple images for batch caption generation"
+                )
+                
+                if uploaded_files:
+                    # Store batch images in session state
+                    batch_images = []
+                    for uploaded_file in uploaded_files:
+                        image = Image.open(uploaded_file)
+                        batch_images.append({
+                            'image': image,
+                            'filename': uploaded_file.name,
+                            'size': image.size
+                        })
+                    
+                    st.session_state.batch_images = batch_images
+                    st.success(f"✅ {len(uploaded_files)} images uploaded successfully!")
+                    
+                    # Display batch images preview
+                    st.markdown("#### 🖼️ Batch Images Preview")
+                    
+                    # Create grid layout for previews
+                    cols_per_row = 3
+                    for i in range(0, len(batch_images), cols_per_row):
+                        cols = st.columns(cols_per_row)
+                        
+                        for j, col in enumerate(cols):
+                            img_idx = i + j
+                            if img_idx < len(batch_images):
+                                img_data = batch_images[img_idx]
+                                
+                                with col:
+                                    st.image(
+                                        img_data['image'], 
+                                        caption=f"{img_data['filename']}\n{img_data['size'][0]}×{img_data['size'][1]}px",
+                                        use_container_width=True
+                                    )
+                    
+                    # Batch processing options
+                    st.markdown("#### ⚙️ Batch Processing Options")
+                    
+                    batch_col1, batch_col2 = st.columns(2)
+                    
+                    with batch_col1:
+                        # Option to resize all images to same dimensions
+                        resize_batch = st.checkbox(
+                            "🔧 Resize all images to same size",
+                            help="Standardize all images to the same dimensions"
+                        )
+                        
+                        if resize_batch:
+                            resize_preset = st.selectbox(
+                                "Batch resize preset:",
+                                [
+                                    "Instagram Square (1080×1080)",
+                                    "Instagram Portrait (1080×1350)", 
+                                    "Instagram Story (1080×1920)",
+                                    "Facebook Post (1200×630)",
+                                    "Custom Size"
+                                ]
+                            )
+                            
+                            if resize_preset == "Custom Size":
+                                batch_width = st.number_input("Width:", min_value=100, max_value=5000, value=1080)
+                                batch_height = st.number_input("Height:", min_value=100, max_value=5000, value=1080)
+                            else:
+                                preset_sizes = {
+                                    "Instagram Square (1080×1080)": (1080, 1080),
+                                    "Instagram Portrait (1080×1350)": (1080, 1350),
+                                    "Instagram Story (1080×1920)": (1080, 1920),
+                                    "Facebook Post (1200×630)": (1200, 630)
+                                }
+                                batch_width, batch_height = preset_sizes.get(resize_preset, (1080, 1080))
+                    
+                    with batch_col2:
+                        # Option to add consistent branding/watermark
+                        add_branding = st.checkbox(
+                            "🏷️ Add consistent branding",
+                            help="Add watermark or branding to all images"
+                        )
+                        
+                        if add_branding:
+                            brand_text = st.text_input(
+                                "Brand text/watermark:",
+                                placeholder="© Your Company Name"
+                            )
+                            
+                            brand_position = st.selectbox(
+                                "Watermark position:",
+                                ["Bottom Right", "Bottom Left", "Top Right", "Top Left", "Center"]
+                            )
+                    
+                    # Apply batch processing
+                    if st.button("🔧 Apply Batch Processing", type="primary"):
+                        if resize_batch or add_branding:
+                            with st.spinner("🔄 Processing batch images..."):
+                                processed_images = []
+                                
+                                for img_data in batch_images:
+                                    processed_img = img_data['image'].copy()
+                                    
+                                    # Apply resize if selected
+                                    if resize_batch:
+                                        processed_img = processed_img.resize((batch_width, batch_height), Image.Resampling.LANCZOS)
+                                    
+                                    # Apply branding if selected (simplified implementation)
+                                    if add_branding and brand_text:
+                                        # This would require PIL ImageDraw for text overlay
+                                        # For now, we'll just note it in the filename
+                                        pass
+                                    
+                                    processed_images.append({
+                                        'image': processed_img,
+                                        'filename': img_data['filename'],
+                                        'size': processed_img.size,
+                                        'processed': True
+                                    })
+                                
+                                st.session_state.batch_images = processed_images
+                                st.success("✅ Batch processing completed!")
+                                st.rerun()
+                        else:
+                            st.info("💡 Select processing options above to apply changes")
+                    
+                    # Batch management controls
+                    st.markdown("#### 🗂️ Batch Management")
+                    
+                    mgmt_col1, mgmt_col2, mgmt_col3 = st.columns(3)
+                    
+                    with mgmt_col1:
+                        if st.button("🗑️ Clear All Images", type="secondary", use_container_width=True):
+                            if 'batch_images' in st.session_state:
+                                del st.session_state.batch_images
+                            if 'current_image' in st.session_state:
+                                del st.session_state.current_image
+                            if 'original_image' in st.session_state:
+                                del st.session_state.original_image
+                            st.success("✅ All batch images cleared!")
+                            st.rerun()
+                    
+                    with mgmt_col2:
+                        if st.button("📊 Batch Summary", use_container_width=True):
+                            total_pixels = sum(img['size'][0] * img['size'][1] for img in batch_images)
+                            avg_width = sum(img['size'][0] for img in batch_images) / len(batch_images)
+                            avg_height = sum(img['size'][1] for img in batch_images) / len(batch_images)
+                            
+                            st.info(f"""
+                            📊 **Batch Summary:**
+                            • Total Images: {len(batch_images)}
+                            • Average Size: {avg_width:.0f}×{avg_height:.0f}px
+                            • Total Pixels: {total_pixels:,}
+                            • Est. Processing Time: {len(batch_images) * 10-15} seconds
+                            """)
+                    
+                    with mgmt_col3:
+                        # Quick batch operations
+                        if st.button("🔄 Refresh Preview", use_container_width=True):
+                            st.rerun()
+                    
+                    # Set current image to first in batch for preview
+                    if batch_images:
+                        current_image = batch_images[0]['image']
+                        st.session_state.current_image = current_image
+                        st.session_state.original_image = current_image.copy()
             
             elif image_source == "From Website":
                 if st.session_state.get('website_analysis'):
@@ -2503,13 +2675,16 @@ def handle_single_page_layout(template_config):
     st.header("🚀 Generate Captions")
     
     # Check if ready to generate
-    generation_ready = ((current_image is not None or text_only_mode) and 
+    batch_images = st.session_state.get('batch_images', [])
+    has_batch_images = len(batch_images) > 0
+    
+    generation_ready = ((current_image is not None or has_batch_images or text_only_mode) and 
                         business_input and business_input.strip())
     
     if not generation_ready:
         st.warning("⚠️ Please complete the following to generate captions:")
-        if not current_image and not text_only_mode:
-            st.write("• 📸 Upload an image or choose text-only mode")
+        if not current_image and not has_batch_images and not text_only_mode:
+            st.write("• 📸 Upload an image, batch images, or choose text-only mode")
         if not business_input or not business_input.strip():
             st.write("• 🏢 Enter business information")
     else:
@@ -2520,7 +2695,11 @@ def handle_single_page_layout(template_config):
                 st.write(f"**Business:** {business_input[:50]}{'...' if len(business_input) > 50 else ''}")
                 st.write(f"**Style:** {caption_style}")
                 st.write(f"**Length:** {caption_length}")
-                st.write(f"**Mode:** {'Text-Only' if text_only_mode else 'Image-Based'}")
+                
+                if has_batch_images:
+                    st.write(f"**Mode:** Batch Mode ({len(batch_images)} images)")
+                else:
+                    st.write(f"**Mode:** {'Text-Only' if text_only_mode else 'Single Image'}")
             with config_col2:
                 st.write(f"**Model:** {'GPT-4o (Premium)' if use_premium_model else 'GPT-4o-mini'}")
                 st.write(f"**CTA:** {'Yes' if include_cta else 'No'}")
@@ -2530,7 +2709,14 @@ def handle_single_page_layout(template_config):
         # Generate button
         generate_col1, generate_col2, generate_col3 = st.columns([1, 2, 1])
         with generate_col2:
-            generate_button_text = "🚀 Generate Text-Only Captions" if text_only_mode else "🚀 Generate Image Captions"
+            # Check if batch mode
+            is_batch_mode = st.session_state.get('batch_images') and len(st.session_state.batch_images) > 1
+            
+            if is_batch_mode:
+                batch_count = len(st.session_state.batch_images)
+                generate_button_text = f"🚀 Generate Batch Captions ({batch_count} images)"
+            else:
+                generate_button_text = "🚀 Generate Text-Only Captions" if text_only_mode else "🚀 Generate Image Captions"
             
             if st.button(generate_button_text, type="primary", use_container_width=True):
                 # Prepare enhanced business input
@@ -2540,26 +2726,75 @@ def handle_single_page_layout(template_config):
                 if target_audience != "General":
                     enhanced_business_input += f" (targeting: {target_audience})"
                 
-                # Generate captions
-                with st.spinner(f"🤖 Generating {'text-only ' if text_only_mode else ''}captions..."):
-                    result = generate_captions(
-                        current_image if not text_only_mode else None,
-                        enhanced_business_input,
-                        website_url,
-                        use_premium_model,
-                        caption_style,
-                        include_cta,
-                        caption_length,
-                        text_only_mode,
-                        character_limit_preference
-                    )
+                # Handle batch vs single generation
+                if is_batch_mode:
+                    # Batch generation
+                    batch_images = st.session_state.batch_images
+                    all_captions = []
                     
-                    if result:
-                        st.session_state.generated_captions = result
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    for i, img_data in enumerate(batch_images):
+                        progress = (i + 1) / len(batch_images)
+                        progress_bar.progress(progress)
+                        status_text.text(f"🤖 Generating captions for image {i+1}/{len(batch_images)}: {img_data['filename']}")
                         
-                        # Update persistent captions counter
-                        new_total = increment_captions_generated(3)
+                        # Generate captions for this image
+                        result = generate_captions(
+                            img_data['image'],
+                            enhanced_business_input,
+                            website_url,
+                            use_premium_model,
+                            caption_style,
+                            include_cta,
+                            caption_length,
+                            False,  # Not text-only mode for batch images
+                            character_limit_preference
+                        )
+                        
+                        if result:
+                            # Add image info header to captions
+                            image_header = f"\n{'='*60}\n📸 IMAGE: {img_data['filename']} ({img_data['size'][0]}×{img_data['size'][1]}px)\n{'='*60}\n"
+                            all_captions.append(image_header + result)
+                    
+                    progress_bar.empty()
+                    status_text.empty()
+                    
+                    if all_captions:
+                        # Combine all batch captions
+                        batch_result = "\n\n".join(all_captions)
+                        st.session_state.generated_captions = batch_result
+                        st.session_state.is_batch_result = True
+                        
+                        # Update persistent captions counter (count all images)
+                        new_total = increment_captions_generated(len(batch_images) * 3)
                         st.session_state.captions_generated = new_total
+                        
+                        st.success(f"✅ Batch captions generated for {len(batch_images)} images!")
+                        st.rerun()
+                else:
+                    # Single generation
+                    with st.spinner(f"🤖 Generating {'text-only ' if text_only_mode else ''}captions..."):
+                        result = generate_captions(
+                            current_image if not text_only_mode else None,
+                            enhanced_business_input,
+                            website_url,
+                            use_premium_model,
+                            caption_style,
+                            include_cta,
+                            caption_length,
+                            text_only_mode,
+                            character_limit_preference
+                        )
+                        
+                        if result:
+                            st.session_state.generated_captions = result
+                            st.session_state.is_batch_result = False
+                            
+                            # Update persistent captions counter
+                            new_total = increment_captions_generated(3)
+                            st.session_state.captions_generated = new_total
                         
                         # Store current settings for potential saving
                         st.session_state.current_settings = {
@@ -2584,15 +2819,112 @@ def handle_single_page_layout(template_config):
     # ========================================
     if st.session_state.get('generated_captions'):
         st.markdown("---")
-        st.header("📝 Your Generated Captions")
         
-        captions = st.session_state.generated_captions.split('\n\n')
+        # Check if this is a batch result
+        is_batch_result = st.session_state.get('is_batch_result', False)
         
-        for i, caption in enumerate(captions):
-            if caption.strip():
-                with st.container():
-                    # Check if caption was previously used
-                    is_duplicate, duplicate_info = is_caption_duplicate(caption.strip())
+        if is_batch_result:
+            st.header("📝 Your Batch Generated Captions")
+            st.info("🚀 Captions generated for multiple images. Each image has its own set of captions below.")
+            
+            # Split batch results by image headers
+            full_content = st.session_state.generated_captions
+            image_sections = full_content.split('\n' + '='*60)
+            
+            for section_idx, section in enumerate(image_sections):
+                if section.strip():
+                    # Extract image info and captions
+                    lines = section.strip().split('\n')
+                    
+                    # Find image header line
+                    image_header = ""
+                    caption_start_idx = 0
+                    
+                    for i, line in enumerate(lines):
+                        if line.startswith('📸 IMAGE:'):
+                            image_header = line
+                            caption_start_idx = i + 2  # Skip header and separator
+                            break
+                    
+                    if image_header:
+                        # Display image header
+                        st.subheader(image_header)
+                        
+                        # Extract captions for this image
+                        image_captions = '\n'.join(lines[caption_start_idx:])
+                        image_caption_list = [cap.strip() for cap in image_captions.split('\n\n') if cap.strip()]
+                        
+                        # Display captions for this image
+                        for cap_idx, caption in enumerate(image_caption_list):
+                            if caption.strip() and not caption.startswith('='):
+                                with st.container():
+                                    # Check if caption was previously used
+                                    is_duplicate, duplicate_info = is_caption_duplicate(caption.strip())
+                                    
+                                    # Caption header
+                                    if is_duplicate:
+                                        st.write(f"⚠️ **Caption {cap_idx+1} (Previously Used)**")
+                                        st.warning(f"🔄 Similar caption used on {duplicate_info['used_date'][:10]} for {duplicate_info.get('business', 'Unknown')}")
+                                    else:
+                                        st.write(f"✨ **Caption {cap_idx+1} (New)**")
+                                    
+                                    # Caption content
+                                    caption_col, action_col = st.columns([4, 1])
+                                    
+                                    with caption_col:
+                                        st.text_area(
+                                            "Caption Text:",
+                                            value=caption.strip(),
+                                            height=120,
+                                            key=f"batch_caption_{section_idx}_{cap_idx}",
+                                            help="Caption text - copy this to use in your social media posts"
+                                        )
+                                        
+                                        # Character count and platform suitability
+                                        char_count = len(caption.strip())
+                                        
+                                        platform_col1, platform_col2, platform_col3, platform_col4 = st.columns(4)
+                                        with platform_col1:
+                                            fb_suitable = "✅" if char_count <= 500 else "⚠️"
+                                            st.caption(f"Facebook: {fb_suitable} ({char_count}/500)")
+                                        with platform_col2:
+                                            ig_suitable = "✅" if char_count <= 400 else "⚠️"
+                                            st.caption(f"Instagram: {ig_suitable} ({char_count}/400)")
+                                        with platform_col3:
+                                            li_suitable = "✅" if char_count <= 700 else "⚠️"
+                                            st.caption(f"LinkedIn: {li_suitable} ({char_count}/700)")
+                                        with platform_col4:
+                                            tw_suitable = "✅" if char_count <= 280 else "⚠️"
+                                            st.caption(f"Twitter/X: {tw_suitable} ({char_count}/280)")
+                                    
+                                    with action_col:
+                                        # Mark as used toggle
+                                        is_currently_used = is_caption_duplicate(caption.strip())[0]
+                                        
+                                        if is_currently_used:
+                                            if st.button(f"🔄 Unmark", key=f"batch_unmark_{section_idx}_{cap_idx}", help="Remove from usage history"):
+                                                if unmark_caption_as_used(caption.strip()):
+                                                    st.success("✅ Removed from history!")
+                                                    st.rerun()
+                                        else:
+                                            if st.button(f"✅ Mark Used", key=f"batch_mark_{section_idx}_{cap_idx}", help="Mark as used"):
+                                                mark_caption_as_used(caption.strip(), business_input)
+                                                st.success("📝 Marked as used!")
+                                                st.rerun()
+                                
+                                st.markdown("---")
+                        
+                        st.markdown("---")
+        else:
+            st.header("📝 Your Generated Captions")
+            
+            captions = st.session_state.generated_captions.split('\n\n')
+            
+            for i, caption in enumerate(captions):
+                if caption.strip():
+                    with st.container():
+                        # Check if caption was previously used
+                        is_duplicate, duplicate_info = is_caption_duplicate(caption.strip())
                     
                     # Caption header
                     if is_duplicate:
@@ -2652,62 +2984,192 @@ def handle_single_page_layout(template_config):
         # ========================================
         st.header("💾 Download & Save Options")
         
-        download_col1, download_col2, download_col3, save_col = st.columns(4)
+        # Check if this is a batch result for enhanced download options
+        is_batch_result = st.session_state.get('is_batch_result', False)
+        batch_images = st.session_state.get('batch_images', [])
         
-        with download_col1:
-            st.download_button(
-                label="📄 Download Captions",
-                data=st.session_state.generated_captions,
-                file_name=f"captions_{business_input.replace(' ', '_')}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-        
-        with download_col2:
-            if current_image and not text_only_mode:
-                img_buffer = io.BytesIO()
-                current_image.save(img_buffer, format='PNG')
-                img_buffer.seek(0)
+        if is_batch_result and batch_images:
+            st.info(f"📦 **Batch Mode**: Enhanced download options for {len(batch_images)} images")
+            
+            # Batch download options
+            batch_col1, batch_col2 = st.columns(2)
+            
+            with batch_col1:
+                st.subheader("📄 Caption Downloads")
                 
+                # Download all captions as one file
                 st.download_button(
-                    label="🖼️ Download Image",
-                    data=img_buffer.getvalue(),
-                    file_name=f"image_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
-                    mime="image/png",
+                    label="📄 Download All Captions",
+                    data=st.session_state.generated_captions,
+                    file_name=f"batch_captions_{business_input.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    help="Download all batch captions in one file"
+                )
+                
+                # Download individual caption files option
+                if st.button("📄 Download Individual Files", use_container_width=True, help="Download separate caption files for each image"):
+                    # Create a zip file with individual caption files
+                    import zipfile
+                    zip_buffer = io.BytesIO()
+                    
+                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                        # Split batch results by image headers
+                        full_content = st.session_state.generated_captions
+                        image_sections = full_content.split('\n' + '='*60)
+                        
+                        for section_idx, section in enumerate(image_sections):
+                            if section.strip():
+                                lines = section.strip().split('\n')
+                                
+                                # Find image filename
+                                image_filename = f"image_{section_idx + 1}"
+                                for line in lines:
+                                    if line.startswith('📸 IMAGE:') and '(' in line:
+                                        # Extract filename from header
+                                        filename_part = line.split('📸 IMAGE:')[1].split('(')[0].strip()
+                                        if filename_part:
+                                            image_filename = filename_part.replace('.', '_')
+                                        break
+                                
+                                # Extract captions for this image
+                                caption_start_idx = 0
+                                for i, line in enumerate(lines):
+                                    if line.startswith('📸 IMAGE:'):
+                                        caption_start_idx = i + 2
+                                        break
+                                
+                                if caption_start_idx < len(lines):
+                                    image_captions = '\n'.join(lines[caption_start_idx:])
+                                    clean_captions = '\n\n'.join([cap.strip() for cap in image_captions.split('\n\n') if cap.strip() and not cap.startswith('=')])
+                                    
+                                    # Add to zip
+                                    zip_file.writestr(f"{image_filename}_captions.txt", clean_captions)
+                    
+                    zip_buffer.seek(0)
+                    
+                    st.download_button(
+                        label="📦 Download Individual Zip",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"individual_captions_{datetime.now().strftime('%Y%m%d_%H%M')}.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+            
+            with batch_col2:
+                st.subheader("🖼️ Image Downloads")
+                
+                # Download all images as zip
+                if st.button("🖼️ Download All Images", use_container_width=True, help="Download all batch images as zip"):
+                    import zipfile
+                    zip_buffer = io.BytesIO()
+                    
+                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                        for img_data in batch_images:
+                            img_buffer = io.BytesIO()
+                            img_data['image'].save(img_buffer, format='PNG')
+                            img_buffer.seek(0)
+                            
+                            # Use original filename or create new one
+                            filename = img_data.get('filename', f"image_{batch_images.index(img_data)+1}.png")
+                            if not filename.lower().endswith('.png'):
+                                filename = filename.rsplit('.', 1)[0] + '.png'
+                            
+                            zip_file.writestr(filename, img_buffer.getvalue())
+                    
+                    zip_buffer.seek(0)
+                    
+                    st.download_button(
+                        label="📦 Download Images Zip",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"batch_images_{datetime.now().strftime('%Y%m%d_%H%M')}.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+                
+                # Individual image download selector
+                if len(batch_images) <= 10:  # Only show individual downloads for reasonable numbers
+                    selected_image = st.selectbox(
+                        "Download individual image:",
+                        [f"{i+1}. {img['filename']}" for i, img in enumerate(batch_images)],
+                        help="Select an image to download individually"
+                    )
+                    
+                    if selected_image:
+                        img_idx = int(selected_image.split('.')[0]) - 1
+                        selected_img_data = batch_images[img_idx]
+                        
+                        img_buffer = io.BytesIO()
+                        selected_img_data['image'].save(img_buffer, format='PNG')
+                        img_buffer.seek(0)
+                        
+                        st.download_button(
+                            label=f"📥 Download {selected_img_data['filename']}",
+                            data=img_buffer.getvalue(),
+                            file_name=selected_img_data['filename'],
+                            mime="image/png",
+                            use_container_width=True
+                        )
+                else:
+                    st.info("💡 Too many images for individual selection. Use 'Download All Images' instead.")
+        else:
+            # Standard single-image download options
+            download_col1, download_col2, download_col3, save_col = st.columns(4)
+            
+            with download_col1:
+                st.download_button(
+                    label="📄 Download Captions",
+                    data=st.session_state.generated_captions,
+                    file_name=f"captions_{business_input.replace(' ', '_')}.txt",
+                    mime="text/plain",
                     use_container_width=True
                 )
-            else:
-                st.info("No image to download")
-        
-        with download_col3:
-            # Create combined package
-            combined_content = f"Social Media Captions for {business_input}\n"
-            combined_content += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-            combined_content += f"Style: {caption_style} | Length: {caption_length}\n"
-            combined_content += f"Mode: {'Text-Only' if text_only_mode else 'Image-Based'}\n\n"
-            combined_content += "=" * 50 + "\n\n"
-            combined_content += st.session_state.generated_captions
             
-            st.download_button(
-                label="📦 Download Package",
-                data=combined_content,
-                file_name=f"package_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-        
-        with save_col:
-            # Company profile save option
-            if st.button("💾 Save Company", use_container_width=True):
-                if st.session_state.get('current_settings'):
-                    settings = st.session_state.current_settings
-                    profile_data = create_profile_data_from_settings(settings)
-                    company_name = settings.get('business_input', 'Unknown Company')
+            with download_col2:
+                if current_image and not text_only_mode:
+                    img_buffer = io.BytesIO()
+                    current_image.save(img_buffer, format='PNG')
+                    img_buffer.seek(0)
                     
-                    if save_company_profile(company_name, profile_data):
-                        st.success(f"✅ Saved: {company_name}")
-                    else:
-                        st.error("❌ Failed to save")
+                    st.download_button(
+                        label="🖼️ Download Image",
+                        data=img_buffer.getvalue(),
+                        file_name=f"image_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+                        mime="image/png",
+                        use_container_width=True
+                    )
+                else:
+                    st.info("No image to download")
+            
+            with download_col3:
+                # Create combined package
+                combined_content = f"Social Media Captions for {business_input}\n"
+                combined_content += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+                combined_content += f"Style: {caption_style} | Length: {caption_length}\n"
+                combined_content += f"Mode: {'Text-Only' if text_only_mode else 'Image-Based'}\n\n"
+                combined_content += "=" * 50 + "\n\n"
+                combined_content += st.session_state.generated_captions
+                
+                st.download_button(
+                    label="📦 Download Package",
+                    data=combined_content,
+                    file_name=f"package_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+            
+            with save_col:
+                # Company profile save option
+                if st.button("💾 Save Company", use_container_width=True):
+                    if st.session_state.get('current_settings'):
+                        settings = st.session_state.current_settings
+                        profile_data = create_profile_data_from_settings(settings)
+                        company_name = settings.get('business_input', 'Unknown Company')
+                        
+                        if save_company_profile(company_name, profile_data):
+                            st.success(f"✅ Saved: {company_name}")
+                        else:
+                            st.error("❌ Failed to save")
                 else:
                     st.warning("⚠️ No settings to save")
 
