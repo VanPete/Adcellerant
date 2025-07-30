@@ -29,8 +29,8 @@ from PIL import Image
 from urllib.parse import urljoin, urlparse
 
 # === Constants ===
-# Data file configurations
-COMPANY_DATA_FILE = "company_profiles.json"
+# Data file configurations - These files persist across all users and sessions
+COMPANY_DATA_FILE = "company_profiles.json"  # Shared company directory across all users
 USED_CAPTIONS_FILE = "used_captions.json" 
 FEEDBACK_FILE = "user_feedback.json"
 STATS_FILE = "app_statistics.json"
@@ -123,9 +123,19 @@ def show_logout_option():
         st.markdown("---")
         st.markdown("### 🔓 Session")
         if st.button("🚪 Logout", type="secondary", use_container_width=True):
-            # Clear password session
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
+            # Clear only authentication-related session state
+            # Company directory and other persistent data remain intact
+            auth_keys_to_clear = [
+                'password_correct', 'password', 'current_image', 'generated_captions', 
+                'website_analysis', 'selected_web_image', 'auto_business', 
+                'selected_company_profile', 'selected_company_name', 'editing_company', 
+                'editing_profile', 'show_save_options', 'show_documentation', 
+                'show_feedback', 'image_selection_mode', 'clipboard_image', 'uploaded_image'
+            ]
+            
+            for key in auth_keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
             st.rerun()
 
 # === Caption Tracking System ===
@@ -507,8 +517,13 @@ def export_feedback_data():
     return output.getvalue()
 
 # === Company Directory Management ===
+# NOTE: Company profiles are stored persistently in JSON files and shared across ALL users.
+# This data persists across sessions, logouts, and app restarts.
 def load_company_profiles():
-    """Load saved company profiles from JSON file with error handling."""
+    """Load saved company profiles from JSON file with error handling.
+    
+    Company profiles are shared across all users and persist across sessions.
+    """
     try:
         if os.path.exists(COMPANY_DATA_FILE):
             with open(COMPANY_DATA_FILE, 'r', encoding='utf-8') as f:
@@ -522,7 +537,10 @@ def load_company_profiles():
         return {}
 
 def save_company_profiles(profiles):
-    """Save company profiles to JSON file with error handling."""
+    """Save company profiles to JSON file with error handling.
+    
+    Company profiles are shared across all users and persist across sessions.
+    """
     try:
         with open(COMPANY_DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(profiles, f, indent=2, ensure_ascii=False)
@@ -532,7 +550,10 @@ def save_company_profiles(profiles):
         return False
 
 def save_company_profile(company_name, profile_data):
-    """Save a single company profile with timestamp tracking."""
+    """Save a single company profile with timestamp tracking.
+    
+    Company profiles are shared across all users and persist across sessions.
+    """
     if not company_name or not profile_data:
         return False
         
@@ -1781,6 +1802,168 @@ def create_advanced_sidebar():
             return templates[selected_template]
         return None
 
+def handle_single_page_layout(template_config):
+    """Handle the single page layout with all inputs and outputs on one page."""
+    
+    # Section 1: Image & Business Information
+    st.header("📸 Image & Business Information")
+    
+    # Image input section
+    image_col1, image_col2 = st.columns([2, 1])
+    
+    with image_col1:
+        # Image mode selection
+        st.markdown("**📷 Content Mode:**")
+        mode_col1, mode_col2 = st.columns(2)
+        
+        with mode_col1:
+            text_only_mode = st.radio(
+                "Content Type",
+                ["Image + Text", "Text Only"],
+                index=1 if st.session_state.get('temp_text_only_mode', False) else 0,
+                help="Choose whether to include an image or create text-only posts"
+            )
+            text_only_mode = (text_only_mode == "Text Only")
+            st.session_state.temp_text_only_mode = text_only_mode
+        
+        with mode_col2:
+            if not text_only_mode:
+                image_source = st.radio(
+                    "Image Source",
+                    ["Upload File", "From Website", "Clipboard"],
+                    help="Choose how to provide your image"
+                )
+        
+        # Image upload/selection based on mode
+        current_image = None
+        
+        if not text_only_mode:
+            if image_source == "Upload File":
+                uploaded_file = st.file_uploader(
+                    "Choose an image file",
+                    type=['png', 'jpg', 'jpeg', 'webp'],
+                    help="Upload an image file for caption generation"
+                )
+                if uploaded_file:
+                    current_image = Image.open(uploaded_file)
+                    st.session_state.current_image = current_image
+            
+            elif image_source == "From Website" and st.session_state.get('website_analysis'):
+                website_images = st.session_state.website_analysis.get('images', [])
+                if website_images:
+                    selected_img_idx = st.selectbox(
+                        "Select website image",
+                        range(len(website_images)),
+                        format_func=lambda x: f"Image {x+1}: {website_images[x]['description'][:50]}..."
+                    )
+                    
+                    if st.button("🖼️ Use Selected Image"):
+                        try:
+                            img_url = website_images[selected_img_idx]['url']
+                            response = requests.get(img_url, timeout=10)
+                            current_image = Image.open(io.BytesIO(response.content))
+                            st.session_state.current_image = current_image
+                        except Exception as e:
+                            st.error(f"Failed to load image: {str(e)}")
+                else:
+                    st.info("No website images available. Analyze a website first.")
+            
+            elif image_source == "Clipboard":
+                st.info("💡 Use Ctrl+V to paste an image from your clipboard")
+                if st.button("📋 Paste from Clipboard"):
+                    st.info("This feature requires additional setup. Use file upload instead.")
+            
+            # Show current image
+            if st.session_state.get('current_image'):
+                current_image = st.session_state.current_image
+                st.image(current_image, caption="Current Image", use_container_width=True)
+        
+        # Business information input
+        st.markdown("**🏢 Business Information:**")
+        
+        # Pre-fill from template or profile
+        default_business = ""
+        default_website = ""
+        
+        if st.session_state.get('selected_company_profile'):
+            profile = st.session_state.selected_company_profile
+            default_business = profile.get('business_input', '')
+            default_website = profile.get('website_url', '')
+        elif template_config:
+            default_business = f"{template_config.get('type', 'business')} focusing on {', '.join(template_config.get('keywords', [])[:3])}"
+        
+        business_input = st.text_area(
+            "Business Type / Company Description",
+            value=default_business,
+            placeholder="e.g., Italian restaurant, fitness studio, consulting firm, online store, etc.",
+            height=100,
+            help="Describe your business type or provide company details"
+        )
+        st.session_state.temp_business_input = business_input
+        
+        website_url = st.text_input(
+            "🔗 Website URL (Optional)",
+            value=default_website,
+            placeholder="https://yourcompany.com",
+            help="Provide website URL for enhanced context (optional)"
+        )
+        st.session_state.temp_website_url = website_url
+        
+        # Website analysis button
+        if website_url and website_url.strip():
+            if st.button("🔍 Analyze Website"):
+                website_info = analyze_website_with_spinner(website_url.strip())
+                if website_info:
+                    st.session_state.website_analysis = website_info
+                    st.success("✅ Website analyzed successfully!")
+                    st.rerun()
+    
+    with image_col2:
+        st.markdown("**💡 Tips & Templates:**")
+        
+        # Business templates
+        templates = create_business_profile_template()
+        selected_template = st.selectbox(
+            "Quick Business Types",
+            ["Custom"] + list(templates.keys()),
+            help="Select a template to auto-fill settings"
+        )
+        
+        if selected_template != "Custom":
+            template = templates[selected_template]
+            template_config = template
+            st.success(f"✅ Template: {selected_template}")
+            
+            with st.expander("Template Details"):
+                st.write(f"**Style:** {template['tone']}")
+                st.write(f"**Keywords:** {', '.join(template['keywords'])}")
+                st.write(f"**CTA Style:** {template['cta_style']}")
+        
+        # Image tips
+        if not text_only_mode:
+            st.markdown("**📸 Image Tips:**")
+            st.info("""
+            • Use high-quality images (200x200+ pixels)
+            • Avoid images with too much text
+            • Choose images that represent your brand
+            • Consider your target audience
+            """)
+        else:
+            st.markdown("**📝 Text-Only Tips:**")
+            st.info("""
+            • Focus on compelling business descriptions
+            • Include key services or products
+            • Mention your unique value proposition
+            • Consider your brand personality
+            """)
+    
+    st.markdown("---")
+    
+    # Store section 1 variables for use in other sections
+    st.session_state.temp_business_input = business_input
+    st.session_state.temp_website_url = website_url
+    st.session_state.temp_text_only_mode = text_only_mode
+
 # === Main Application Functions ===
 def initialize_session_state():
     """Initialize session state variables."""
@@ -2507,1101 +2690,8 @@ def main():
     template_config = create_advanced_sidebar()
     show_logout_option()
     
-    # Create main tabs
-    tab1, tab2, tab3, tab4, tab5, tab6 = create_main_tabs()
-    
-    # Tab 1: Image & Business
-    with tab1:
-        image, business_input, website_url, text_only_mode = handle_image_business_tab()
-    
-    # Tab 2: Style Settings (keeping existing implementation for now)
-    with tab2:
-        st.header("🎨 Caption Style & Customization")
-        
-        style_col1, style_col2 = st.columns(2)
-        
-        with style_col1:
-            # Pre-fill from loaded profile or template
-            default_style = "Professional"
-            default_length = 1  # Medium
-            default_premium = False
-            default_cta = True
-            
-            if st.session_state.get('selected_company_profile'):
-                profile = st.session_state.selected_company_profile
-                default_style = profile.get('caption_style', 'Professional')
-                length_options = ["Short (3-4 sentences)", "Medium (4-6 sentences)", "Long (6+ sentences)"]
-                try:
-                    default_length = length_options.index(profile.get('caption_length', 'Medium (4-6 sentences)'))
-                except ValueError:
-                    default_length = 1
-                default_premium = profile.get('use_premium_model', False)
-                default_cta = profile.get('include_cta', True)
-            elif template_config:
-                default_style = template_config['tone']
-            
-            caption_style = st.selectbox(
-                "🎭 Caption Style",
-                ["Professional", "Casual & Friendly", "Inspirational", "Educational", "Promotional"],
-                index=["Professional", "Casual & Friendly", "Inspirational", "Educational", "Promotional"].index(default_style),
-                help="Choose the tone and style for your captions"
-            )
-            
-            caption_length = st.selectbox(
-                "📏 Caption Length",
-                ["Short (3-4 sentences)", "Medium (4-6 sentences)", "Long (6+ sentences)"],
-                index=default_length,
-                help="Preferred length for generated captions"
-            )
-            
-            use_premium_model = st.checkbox(
-                "⭐ Use Premium Model (GPT-4o)",
-                value=default_premium,
-                help="Higher quality results but costs more. Uncheck for cost-effective GPT-4o-mini."
-            )
-        
-        with style_col2:
-            include_cta = st.checkbox(
-                "🎯 Include Call-to-Action",
-                value=default_cta,
-                help="Add subtle calls-to-action in captions"
-            )
-            
-            # Advanced customization options
-            st.markdown("**🔧 Advanced Options:**")
-            
-            # Pre-fill advanced options from profile
-            default_focus = ""
-            default_avoid = ""
-            default_audience = 0
-            
-            if st.session_state.get('selected_company_profile'):
-                profile = st.session_state.selected_company_profile
-                default_focus = profile.get('focus_keywords', '')
-                default_avoid = profile.get('avoid_words', '')
-                audience_options = ["General", "Young Adults (18-35)", "Professionals", "Families", "Seniors", "Local Community"]
-                try:
-                    default_audience = audience_options.index(profile.get('target_audience', 'General'))
-                except ValueError:
-                    default_audience = 0
-            
-            focus_keywords = st.text_input(
-                "Focus Keywords",
-                value=default_focus,
-                placeholder="e.g., organic, handmade, premium",
-                help="Keywords to emphasize in captions"
-            )
-            
-            avoid_words = st.text_input(
-                "Words to Avoid",
-                value=default_avoid,
-                placeholder="e.g., cheap, basic, generic",
-                help="Words to avoid in captions"
-            )
-            
-            target_audience = st.selectbox(
-                "Target Audience",
-                ["General", "Young Adults (18-35)", "Professionals", "Families", "Seniors", "Local Community"],
-                index=default_audience,
-                help="Tailor captions to specific audience"
-            )
-            
-            # Social Media Character Limits Option
-            st.markdown("**📱 Platform Optimization:**")
-            
-            # Pre-fill character limit option from profile
-            default_char_limit = "No limit"
-            if st.session_state.get('selected_company_profile'):
-                profile = st.session_state.selected_company_profile
-                default_char_limit = profile.get('character_limit_preference', 'No limit')
-            
-            character_limit_preference = st.selectbox(
-                "📊 Fit Character Limits",
-                ["No limit", "Facebook (≤500 chars)", "Instagram (≤400 chars)", "LinkedIn (≤700 chars)", "Twitter/X (≤280 chars)", "All platforms (≤280 chars)"],
-                index=["No limit", "Facebook (≤500 chars)", "Instagram (≤400 chars)", "LinkedIn (≤700 chars)", "Twitter/X (≤280 chars)", "All platforms (≤280 chars)"].index(default_char_limit) if default_char_limit in ["No limit", "Facebook (≤500 chars)", "Instagram (≤400 chars)", "LinkedIn (≤700 chars)", "Twitter/X (≤280 chars)", "All platforms (≤280 chars)"] else 0,
-                help="Optimize captions to fit specific social media platform character limits"
-            )
-            
-            # Show character limit info
-            if character_limit_preference != "No limit":
-                char_limits = {
-                    "Facebook (≤500 chars)": "📘 Facebook allows up to ~500 characters for optimal engagement",
-                    "Instagram (≤400 chars)": "📷 Instagram captions work best under 400 characters", 
-                    "LinkedIn (≤700 chars)": "💼 LinkedIn allows longer content up to ~700 characters",
-                    "Twitter/X (≤280 chars)": "🐦 Twitter/X has a strict 280 character limit",
-                    "All platforms (≤280 chars)": "🌐 Universal format that works on all platforms"
-                }
-                st.info(char_limits[character_limit_preference])
-            
-            # Store in session state for cross-tab access
-            st.session_state.temp_caption_style = caption_style
-            st.session_state.temp_caption_length = caption_length
-            st.session_state.temp_use_premium_model = use_premium_model
-            st.session_state.temp_include_cta = include_cta
-            st.session_state.temp_focus_keywords = focus_keywords
-            st.session_state.temp_avoid_words = avoid_words
-            st.session_state.temp_target_audience = target_audience
-            st.session_state.temp_character_limit_preference = character_limit_preference
-    
-    with tab3:
-        st.header("🌐 Website Analysis & Context")
-        
-        analysis_col1, analysis_col2 = st.columns([2, 1])
-        
-        with analysis_col1:
-            # Pre-fill website URL from loaded profile
-            default_website_url = ""
-            if st.session_state.get('selected_company_profile'):
-                default_website_url = st.session_state.selected_company_profile.get('website_url', '')
-            
-            website_url = st.text_input(
-                "🔗 Company Website URL",
-                value=default_website_url,
-                placeholder="https://yourcompany.com or yourcompany.com",
-                help="Provide website URL for enhanced, brand-specific captions"
-            )
-            
-            if website_url and website_url.strip():
-                if st.button("🔍 Analyze Website", type="primary"):
-                    show_progress_indicator(1, 3, "Fetching main page")
-                    website_info = analyze_website_with_spinner(website_url.strip())
-                    st.session_state.website_analysis = website_info
-                    
-                    if website_info:
-                        show_progress_indicator(2, 3, "Analyzing content")
-                        st.success(f"✅ Analysis complete! Found {len(website_info.get('pages_analyzed', []))} pages")
-                        
-                        show_progress_indicator(3, 3, "Processing complete")
-                        
-                        # Display analysis summary
-                        st.markdown("### 📊 Website Analysis Summary")
-                        
-                        summary_col1, summary_col2, summary_col3 = st.columns(3)
-                        
-                        with summary_col1:
-                            st.metric("Pages Analyzed", len(website_info.get('pages_analyzed', [])))
-                        
-                        with summary_col2:
-                            st.metric("Services Found", len(website_info.get('services', [])))
-                        
-                        with summary_col3:
-                            st.metric("Images Found", len(website_info.get('images', [])))
-                        
-                        # Show detailed analysis
-                        with st.expander("📄 Detailed Analysis"):
-                            if website_info.get('about_text'):
-                                st.markdown("**About Text:**")
-                                st.text_area("Company Description", website_info['about_text'][:500] + "..." if len(website_info['about_text']) > 500 else website_info['about_text'], height=100, disabled=True)
-                            
-                            if website_info.get('services'):
-                                st.markdown("**Services/Products:**")
-                                for i, service in enumerate(website_info['services'][:5], 1):
-                                    st.write(f"{i}. {service}")
-                            
-                            st.markdown("**Pages Analyzed:**")
-                            for i, page in enumerate(website_info.get('pages_analyzed', []), 1):
-                                st.write(f"{i}. {page}")
-            
-            # Website image selection - enhanced UI
-            if st.session_state.get('website_analysis') and st.session_state.website_analysis.get('images'):
-                st.markdown("### 🖼️ Website Images")
-                website_info = st.session_state.website_analysis
-                
-                st.info("ℹ️ Website images found! Go to the 'Image & Business' tab to select one for your captions.")
-                
-                # Create a grid of images for reference only
-                cols = st.columns(min(3, len(website_info['images'])))
-                
-                for i, img_info in enumerate(website_info['images']):
-                    col_idx = i % 3
-                    with cols[col_idx]:
-                        try:
-                            img_response = requests.get(img_info['url'], timeout=5)
-                            if img_response.status_code == 200:
-                                web_image = Image.open(io.BytesIO(img_response.content))
-                                st.image(web_image, caption=f"Image {i+1}", use_container_width=True)
-                                st.caption(img_info['description'][:50] + "..." if len(img_info['description']) > 50 else img_info['description'])
-                        except Exception:
-                            st.warning(f"⚠️ Could not load image {i+1}")
-        
-        with analysis_col2:
-            st.markdown("### 📈 Analysis Tips")
-            st.info("""
-            **For best results:**
-            • Use the company's main website
-            • Ensure site is publicly accessible
-            • Check that pages load properly
-            • Larger sites give better context
-            """)
-            
-            if st.session_state.get('website_analysis'):
-                st.markdown("### ✅ Analysis Status")
-                st.success("Website analysis complete!")
-                
-                if st.button("🔄 Re-analyze Website"):
-                    st.session_state.website_analysis = None
-                    st.rerun()
-    
-    with tab4:
-        st.header("📱 Generate & Download Captions")
-        
-        # Generation section
-        generation_ready = ((st.session_state.get('current_image') is not None or text_only_mode) and 
-                          business_input and business_input.strip())
-        
-        if not generation_ready:
-            st.warning("⚠️ Please complete the following to generate captions:")
-            if not st.session_state.get('current_image') and not text_only_mode:
-                st.write("• 📸 Select an image or choose text-only mode")
-            if not business_input or not business_input.strip():
-                st.write("• 🏢 Enter business information")
-        else:
-            if text_only_mode:
-                st.success("✅ Ready to generate text-only captions!")
-            else:
-                st.success("✅ Ready to generate image-based captions!")
-            
-            # Show current configuration
-            with st.expander("📋 Current Configuration"):
-                config_col1, config_col2 = st.columns(2)
-                with config_col1:
-                    st.write(f"**Business:** {business_input}")
-                    st.write(f"**Style:** {caption_style}")
-                    st.write(f"**Length:** {caption_length}")
-                    st.write(f"**Mode:** {'Text-Only' if text_only_mode else 'Image-Based'}")
-                    # Get character limit preference for display
-                    char_limit_pref = st.session_state.get('temp_character_limit_preference', 'No limit')
-                    st.write(f"**Character Limit:** {char_limit_pref}")
-                with config_col2:
-                    st.write(f"**Model:** {'GPT-4o (Premium)' if use_premium_model else 'GPT-4o-mini'}")
-                    st.write(f"**CTA:** {'Yes' if include_cta else 'No'}")
-                    st.write(f"**Website:** {'Analyzed' if st.session_state.get('website_analysis') else 'Not used'}")
-                    if focus_keywords:
-                        st.write(f"**Focus:** {focus_keywords}")
-            
-            # Generate button
-            generate_button_text = "🚀 Generate Text-Only Captions" if text_only_mode else "🚀 Generate Social Media Captions"
-            
-            if st.button(generate_button_text, type="primary", use_container_width=True):
-                show_progress_indicator(1, 4, "Preparing context and settings")
-                
-                # Get variables from current tab context
-                if 'business_input' not in locals():
-                    business_input = st.session_state.get('temp_business_input', '')
-                if 'website_url' not in locals():
-                    website_url = st.session_state.get('temp_website_url', '')
-                if 'caption_style' not in locals():
-                    caption_style = st.session_state.get('temp_caption_style', 'Professional')
-                if 'caption_length' not in locals():
-                    caption_length = st.session_state.get('temp_caption_length', 'Medium (4-6 sentences)')
-                if 'use_premium_model' not in locals():
-                    use_premium_model = st.session_state.get('temp_use_premium_model', False)
-                if 'include_cta' not in locals():
-                    include_cta = st.session_state.get('temp_include_cta', True)
-                if 'focus_keywords' not in locals():
-                    focus_keywords = st.session_state.get('temp_focus_keywords', '')
-                if 'target_audience' not in locals():
-                    target_audience = st.session_state.get('temp_target_audience', 'General')
-                if 'text_only_mode' not in locals():
-                    text_only_mode = st.session_state.get('temp_text_only_mode', False)
-                if 'character_limit_preference' not in locals():
-                    character_limit_preference = st.session_state.get('temp_character_limit_preference', 'No limit')
-                
-                # Build enhanced prompt with all customizations
-                enhanced_business_input = business_input
-                if focus_keywords:
-                    enhanced_business_input += f" (focus on: {focus_keywords})"
-                if target_audience != "General":
-                    enhanced_business_input += f" (targeting: {target_audience})"
-                
-                show_progress_indicator(2, 4, f"Generating {'text-only ' if text_only_mode else ''}captions with AI")
-                
-                # Use current image or None for text-only mode
-                final_image = None if text_only_mode else st.session_state.get('current_image')
-                
-                result = generate_captions(
-                    final_image, 
-                    enhanced_business_input, 
-                    website_url, 
-                    use_premium_model,
-                    caption_style,
-                    include_cta,
-                    caption_length,
-                    text_only_mode,
-                    character_limit_preference
-                )
-                
-                if result:
-                    show_progress_indicator(3, 4, "Processing results")
-                    st.session_state.generated_captions = result
-                    
-                    # Update persistent captions counter (3 captions generated)
-                    new_total = increment_captions_generated(3)
-                    st.session_state.captions_generated = new_total
-                    
-                    # Store current settings for potential saving
-                    st.session_state.current_settings = {
-                        'business_input': business_input,
-                        'website_url': website_url,
-                        'caption_style': caption_style,
-                        'caption_length': caption_length,
-                        'use_premium_model': use_premium_model,
-                        'include_cta': include_cta,
-                        'focus_keywords': focus_keywords,
-                        'avoid_words': st.session_state.get('temp_avoid_words', ''),
-                        'target_audience': target_audience,
-                        'text_only_mode': text_only_mode,
-                        'character_limit_preference': character_limit_preference
-                    }
-                    
-                    show_progress_indicator(4, 4, "Captions generated successfully!")
-                    st.success("✅ Social media captions generated successfully!")
-        
-        # Display generated captions if available
-        if st.session_state.get('generated_captions'):
-            st.markdown("---")
-            st.header("📝 Your Generated Captions")
-            st.success("🎉 Captions generated successfully! Ready to copy and use.")
-            
-            # Enhanced caption display
-            captions = st.session_state.generated_captions.split('\n\n')
-            
-            for i, caption in enumerate(captions):
-                if caption.strip():
-                    with st.container():
-                        # Check if caption was previously used
-                        is_duplicate, duplicate_info = is_caption_duplicate(caption.strip())
-                        
-                        caption_header_col, mark_used_col = create_caption_action_layout()
-                        
-                        with caption_header_col:
-                            if is_duplicate:
-                                st.subheader(f"⚠️ Caption {i+1} (Previously Used)")
-                                st.warning(f"🔄 Similar caption used on {duplicate_info['used_date'][:10]} for {duplicate_info.get('business', 'Unknown')}")
-                            else:
-                                st.subheader(f"✨ Caption {i+1} (New)")
-                        
-                        with mark_used_col:
-                            # Check if caption is already marked as used
-                            is_currently_used = is_caption_duplicate(caption.strip())[0]
-                            
-                            if is_currently_used:
-                                # Show "Unmark" button if already used
-                                if st.button(f"🔄 Unmark", key=f"unmark_used_{i}", help=f"Remove caption {i+1} from usage history"):
-                                    if unmark_caption_as_used(caption.strip()):
-                                        st.success("✅ Removed from usage history!")
-                                    else:
-                                        st.error("❌ Failed to remove from history")
-                                    st.rerun()
-                            else:
-                                # Show "Mark Used" button if not used
-                                if st.button(f"✅ Mark Used", key=f"mark_used_{i}", help=f"Mark caption {i+1} as used"):
-                                    mark_caption_as_used(caption.strip(), business_input)
-                                    st.success("📝 Marked as used!")
-                                    st.rerun()
-                        
-                        # Caption with enhanced multi-line styling
-                        st.markdown("**Caption Text:**")
-                        # Use text_area for multi-line display with proper height
-                        st.text_area(
-                            label="",
-                            value=caption.strip(),
-                            height=120,
-                            key=f"caption_display_{i}",
-                            help="Caption text - automatically sized for readability",
-                            label_visibility="collapsed"
-                        )
-                        
-                        # Character count and social media suitability
-                        char_count = len(caption.strip())
-                        
-                        suitability_col1, suitability_col2, suitability_col3 = st.columns(3)
-                        with suitability_col1:
-                            fb_suitable = "✅" if char_count <= 500 else "⚠️"
-                            st.caption(f"Facebook: {fb_suitable} ({char_count}/500)")
-                        with suitability_col2:
-                            ig_suitable = "✅" if char_count <= 400 else "⚠️"  
-                            st.caption(f"Instagram: {ig_suitable} ({char_count}/400)")
-                        with suitability_col3:
-                            li_suitable = "✅" if char_count <= 700 else "⚠️"
-                            st.caption(f"LinkedIn: {li_suitable} ({char_count}/700)")
-                        
-                        st.markdown("---")
-            
-            # Download section with enhanced options and save company option
-            st.subheader("💾 Download & Save Options")
-            
-            download_col1, download_col2, download_col3, save_col = create_download_action_layout()
-            
-            with download_col1:
-                st.download_button(
-                    label="📄 Download All Captions",
-                    data=st.session_state.generated_captions,
-                    file_name=f"social_captions_{business_input.replace(' ', '_')}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-            
-            with download_col2:
-                if st.session_state.get('current_image') and not text_only_mode:
-                    current_date = datetime.now().strftime("%Y%m%d")
-                    company_safe_name = business_input.replace(' ', '_').replace('/', '_').replace('\\', '_')
-                    
-                    img_buffer = io.BytesIO()
-                    st.session_state.current_image.save(img_buffer, format='PNG')
-                    img_buffer.seek(0)
-                    
-                    st.download_button(
-                        label="🖼️ Download Image",
-                        data=img_buffer.getvalue(),
-                        file_name=f"{company_safe_name}_{current_date}.png",
-                        mime="image/png",
-                        use_container_width=True
-                    )
-                else:
-                    st.info("💡 Text-only mode - no image to download")
-            
-            with download_col3:
-                # Create combined package
-                combined_content = f"Social Media Captions for {business_input}\n"
-                combined_content += f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-                combined_content += f"Style: {caption_style}\n"
-                combined_content += f"Length: {caption_length}\n"
-                combined_content += f"Mode: {'Text-Only' if text_only_mode else 'Image-Based'}\n\n"
-                combined_content += "=" * 50 + "\n\n"
-                combined_content += st.session_state.generated_captions
-                
-                st.download_button(
-                    label="📦 Download Package",
-                    data=combined_content,
-                    file_name=f"caption_package_{business_input.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-            
-            with save_col:
-                # Company profile save option - enhanced for editing mode
-                save_button_text = "💾 Update Company" if st.session_state.get('editing_company') else "💾 Save Company"
-                save_help_text = "Update the existing company profile" if st.session_state.get('editing_company') else "Save this company profile for future use"
-                
-                if st.button(save_button_text, use_container_width=True, help=save_help_text):
-                    if st.session_state.get('current_settings'):
-                        settings = st.session_state.current_settings
-                        
-                        # Create profile data
-                        profile_data = create_profile_data_from_settings(settings)
-                        
-                        # Check if we're in editing mode
-                        if st.session_state.get('editing_company'):
-                            # Show options to save
-                            st.session_state.show_save_options = True
-                        else:
-                            # Use business name as company name for new saves
-                            company_name = settings.get('business_input', 'Unknown Company')
-                            
-                            if save_company_profile(company_name, profile_data):
-                                st.success(f"✅ Saved company profile: {company_name}")
-                            else:
-                                st.error("❌ Failed to save company profile")
-                    else:
-                        st.warning("⚠️ No settings to save. Generate captions first.")
-                
-                # Show save options when editing
-                if st.session_state.get('show_save_options') and st.session_state.get('editing_company'):
-                    with st.expander("💾 Save Options", expanded=True):
-                        save_option = st.radio(
-                            "How would you like to save?",
-                            ["Overwrite existing company", "Save as new company"],
-                            horizontal=True
-                        )
-                        
-                        if save_option == "Overwrite existing company":
-                            original_name = st.session_state.editing_company
-                            st.write(f"**Overwrite:** {original_name}")
-                            
-                            if st.button("✅ Confirm Overwrite", type="primary"):
-                                if st.session_state.get('current_settings'):
-                                    settings = st.session_state.current_settings
-                                    profile_data = create_profile_data_from_settings(settings)
-                                    
-                                    if save_company_profile(original_name, profile_data):
-                                        st.success(f"✅ Updated company profile: {original_name}")
-                                        # Clear editing mode
-                                        for key in ['editing_company', 'editing_profile', 'show_save_options']:
-                                            if key in st.session_state:
-                                                del st.session_state[key]
-                                        st.rerun()
-                                    else:
-                                        st.error("❌ Failed to update company profile")
-                        
-                        elif save_option == "Save as new company":
-                            new_company_name = st.text_input(
-                                "New Company Name:",
-                                value=st.session_state.get('current_settings', {}).get('business_input', ''),
-                                help="Enter a name for the new company profile"
-                            )
-                            
-                            if new_company_name and st.button("✅ Save as New", type="primary"):
-                                if st.session_state.get('current_settings'):
-                                    settings = st.session_state.current_settings
-                                    profile_data = create_profile_data_from_settings(settings)
-                                    
-                                    if save_company_profile(new_company_name, profile_data):
-                                        st.success(f"✅ Saved new company profile: {new_company_name}")
-                                        # Clear editing mode
-                                        for key in ['editing_company', 'editing_profile', 'show_save_options']:
-                                            if key in st.session_state:
-                                                del st.session_state[key]
-                                        st.rerun()
-                                    else:
-                                        st.error("❌ Failed to save new company profile")
-                        
-                        if st.button("❌ Cancel Save", type="secondary"):
-                            st.session_state.show_save_options = False
-                            st.rerun()
-    
-    with tab5:
-        st.header("🔄 Batch Processing")
-        st.markdown("Generate captions for multiple images at once - perfect for content planning!")
-        
-        batch_col1, batch_col2 = st.columns([2, 1])
-        
-        with batch_col1:
-            st.subheader("📁 Upload Multiple Images")
-            
-            batch_files = st.file_uploader(
-                "Choose multiple images for batch processing",
-                type=['png', 'jpg', 'jpeg', 'webp'],
-                accept_multiple_files=True,
-                help="Upload 2-10 images for batch caption generation"
-            )
-            
-            if batch_files:
-                st.success(f"✅ {len(batch_files)} images uploaded")
-                
-                # Show image preview grid
-                if len(batch_files) <= 6:
-                    cols = st.columns(min(3, len(batch_files)))
-                    for i, uploaded_file in enumerate(batch_files):
-                        col_idx = i % 3
-                        with cols[col_idx]:
-                            image = Image.open(uploaded_file)
-                            st.image(image, caption=f"Image {i+1}", use_container_width=True)
-                            st.caption(f"📏 {image.size[0]}x{image.size[1]}")
-                else:
-                    st.info(f"📊 {len(batch_files)} images ready for processing (preview limited to first 6)")
-                    cols = st.columns(3)
-                    for i in range(min(6, len(batch_files))):
-                        col_idx = i % 3
-                        with cols[col_idx]:
-                            image = Image.open(batch_files[i])
-                            st.image(image, caption=f"Image {i+1}", use_container_width=True)
-        
-        with batch_col2:
-            st.subheader("⚙️ Batch Settings")
-            
-            # Reuse business input from tab1
-            if 'business_input' in locals() and business_input:
-                st.write(f"**Business:** {business_input}")
-            else:
-                batch_business = st.text_input(
-                    "Business Type",
-                    placeholder="e.g., restaurant, fitness studio",
-                    help="Same business info will be used for all images"
-                )
-            
-            batch_style = st.selectbox(
-                "Caption Style for All",
-                ["Professional", "Casual & Friendly", "Inspirational", "Educational", "Promotional"],
-                help="All images will use this style"
-            )
-            
-            batch_length = st.selectbox(
-                "Caption Length for All", 
-                ["Short (3-4 sentences)", "Medium (4-6 sentences)", "Long (6+ sentences)"],
-                index=1
-            )
-            
-            batch_premium = st.checkbox(
-                "Use Premium Model",
-                help="Higher quality but more expensive"
-            )
-            
-            # Processing options
-            st.markdown("**Processing Options:**")
-            
-            individual_files = st.checkbox(
-                "Generate individual files",
-                value=True,
-                help="Create separate caption files for each image"
-            )
-            
-            combined_file = st.checkbox(
-                "Generate combined file", 
-                value=True,
-                help="Create one file with all captions"
-            )
-            
-            auto_download = st.checkbox(
-                "Auto-download results",
-                help="Automatically download files when complete"
-            )
-        
-        # Batch processing execution
-        if batch_files and len(batch_files) > 1:
-            if len(batch_files) > 10:
-                st.warning("⚠️ Batch processing limited to 10 images. Only first 10 will be processed.")
-                batch_files = batch_files[:10]
-            
-            business_for_batch = batch_business if 'batch_business' in locals() and batch_business else business_input if 'business_input' in locals() else ""
-            
-            if st.button("🚀 Start Batch Processing", type="primary", use_container_width=True):
-                if not business_for_batch:
-                    st.error("Please enter business information first!")
-                else:
-                    # Initialize batch results
-                    batch_results = []
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
-                    # Process each image
-                    for i, uploaded_file in enumerate(batch_files):
-                        status_text.text(f"Processing image {i+1}/{len(batch_files)}: {uploaded_file.name}")
-                        progress_bar.progress((i + 1) / len(batch_files))
-                        
-                        try:
-                            # Load image
-                            image = Image.open(uploaded_file)
-                            
-                            # Generate captions
-                            result = generate_captions(
-                                image,
-                                business_for_batch,
-                                website_url if 'website_url' in locals() else "",
-                                batch_premium,
-                                batch_style,
-                                True,  # Include CTA
-                                batch_length,
-                                False,  # text_only_mode
-                                "No limit"  # character_limit_preference - default for batch
-                            )
-                            
-                            if result:
-                                batch_results.append({
-                                    'filename': uploaded_file.name,
-                                    'image': image,
-                                    'captions': result
-                                })
-                            
-                        except Exception as e:
-                            st.error(f"Error processing {uploaded_file.name}: {str(e)}")
-                    
-                    # Display results
-                    if batch_results:
-                        status_text.text(f"✅ Batch processing complete! {len(batch_results)} images processed.")
-                        st.balloons()
-                        
-                        # Update persistent captions counter (3 captions per image)
-                        total_captions = len(batch_results) * 3
-                        new_total = increment_captions_generated(total_captions)
-                        st.session_state.captions_generated = new_total
-                        
-                        # Show results summary
-                        st.markdown("### 📊 Batch Results Summary")
-                        
-                        summary_cols = st.columns(4)
-                        with summary_cols[0]:
-                            st.metric("Images Processed", len(batch_results))
-                        with summary_cols[1]:
-                            total_captions = len(batch_results) * 3
-                            st.metric("Total Captions", total_captions)
-                        with summary_cols[2]:
-                            avg_length = sum(len(r['captions']) for r in batch_results) / len(batch_results)
-                            st.metric("Avg Caption Length", f"{avg_length:.0f} chars")
-                        with summary_cols[3]:
-                            model_used = "GPT-4o" if batch_premium else "GPT-4o-mini"
-                            st.metric("Model Used", model_used)
-                        
-                        # Display individual results
-                        st.markdown("### 📝 Individual Results")
-                        
-                        for i, result in enumerate(batch_results):
-                            with st.expander(f"📸 {result['filename']} - Captions", expanded=i==0):
-                                result_col1, result_col2 = st.columns([1, 2])
-                                
-                                with result_col1:
-                                    st.image(result['image'], caption=result['filename'], use_container_width=True)
-                                
-                                with result_col2:
-                                    st.text_area(
-                                        f"Captions for {result['filename']}",
-                                        value=result['captions'],
-                                        height=200,
-                                        key=f"batch_caption_{i}"
-                                    )
-                        
-                        # Download options
-                        st.markdown("### 💾 Download Batch Results")
-                        
-                        download_cols = st.columns(3)
-                        
-                        with download_cols[0]:
-                            if individual_files:
-                                # Create zip file with individual caption files
-                                import zipfile
-                                zip_buffer = io.BytesIO()
-                                
-                                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                                    for result in batch_results:
-                                        filename = f"captions_{result['filename'].split('.')[0]}.txt"
-                                        zip_file.writestr(filename, result['captions'])
-                                
-                                zip_buffer.seek(0)
-                                
-                                st.download_button(
-                                    label="📦 Download Individual Files (ZIP)",
-                                    data=zip_buffer.getvalue(),
-                                    file_name=f"batch_captions_{datetime.now().strftime('%Y%m%d_%H%M')}.zip",
-                                    mime="application/zip",
-                                    use_container_width=True
-                                )
-                        
-                        with download_cols[1]:
-                            if combined_file:
-                                # Create combined file
-                                combined_content = f"Batch Social Media Captions\n"
-                                combined_content += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-                                combined_content += f"Business: {business_for_batch}\n"
-                                combined_content += f"Style: {batch_style}\n"
-                                combined_content += f"Images Processed: {len(batch_results)}\n"
-                                combined_content += "=" * 60 + "\n\n"
-                                
-                                for i, result in enumerate(batch_results, 1):
-                                    combined_content += f"IMAGE {i}: {result['filename']}\n"
-                                    combined_content += "-" * 40 + "\n"
-                                    combined_content += result['captions']
-                                    combined_content += "\n\n" + "=" * 60 + "\n\n"
-                                
-                                st.download_button(
-                                    label="📄 Download Combined File",
-                                    data=combined_content,
-                                    file_name=f"batch_captions_combined_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                                    mime="text/plain",
-                                    use_container_width=True
-                                )
-                        
-                        with download_cols[2]:
-                            # Download all images as ZIP
-                            img_zip_buffer = io.BytesIO()
-                            
-                            with zipfile.ZipFile(img_zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                                for result in batch_results:
-                                    img_buffer = io.BytesIO()
-                                    result['image'].save(img_buffer, format='PNG')
-                                    img_buffer.seek(0)
-                                    
-                                    filename = f"processed_{result['filename'].split('.')[0]}.png"
-                                    zip_file.writestr(filename, img_buffer.getvalue())
-                            
-                            img_zip_buffer.seek(0)
-                            
-                            st.download_button(
-                                label="🖼️ Download All Images (ZIP)",
-                                data=img_zip_buffer.getvalue(),
-                                file_name=f"batch_images_{datetime.now().strftime('%Y%m%d_%H%M')}.zip",
-                                mime="application/zip",
-                                use_container_width=True
-                            )
-                    else:
-                        st.error("❌ No images were successfully processed. Please check your images and try again.")
-        
-        else:
-            st.info("📝 Upload 2 or more images to enable batch processing")
-            
-            # Batch processing tips
-            with st.expander("💡 Batch Processing Tips"):
-                st.markdown("""
-                **Best Practices:**
-                • Upload 2-10 images for optimal processing time
-                • Use consistent image quality and size
-                • Ensure all images are relevant to your business
-                • Choose appropriate style for your brand
-                
-                **File Management:**
-                • Individual files: Separate caption file for each image
-                • Combined file: All captions in one organized document
-                • ZIP downloads: Easy sharing and organization
-                
-                **Cost Optimization:**
-                • Use GPT-4o-mini for cost-effective batch processing
-                • Upgrade to GPT-4o for premium quality results
-                • Monitor your OpenAI API usage during large batches
-                """)
-    
-    # Tab 6: Caption History
-    with tab6:
-        st.header("📝 Caption History & Search")
-        st.markdown("Search, manage, and analyze your used captions")
-        
-        # Get current usage stats
-        usage_stats = get_caption_usage_stats()
-        
-        if usage_stats['total_used'] == 0:
-            st.info("📭 **No caption history yet**\n\nStart generating captions and marking them as used to build your history.")
-        else:
-            # Stats overview
-            st.markdown("### 📊 Quick Stats")
-            stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
-            
-            with stat_col1:
-                st.metric("Total Used", usage_stats['total_used'])
-            with stat_col2:
-                st.metric("This Week", usage_stats['recent_used'])
-            with stat_col3:
-                businesses = get_unique_businesses()
-                st.metric("Businesses", len(businesses))
-            with stat_col4:
-                st.metric("Most Active", usage_stats['most_used_business'])
-            
-            st.markdown("---")
-            
-            # Search and filter controls
-            st.markdown("### 🔍 Search & Filter")
-            
-            search_col1, search_col2, search_col3 = st.columns([2, 1, 1])
-            
-            with search_col1:
-                search_query = st.text_input(
-                    "Search captions",
-                    placeholder="Enter keywords to search...",
-                    help="Search within caption text"
-                )
-            
-            with search_col2:
-                businesses = get_unique_businesses()
-                business_filter = st.selectbox(
-                    "Filter by business",
-                    ["All businesses"] + businesses,
-                    help="Filter captions by business"
-                )
-                if business_filter == "All businesses":
-                    business_filter = ""
-            
-            with search_col3:
-                date_filter = st.date_input(
-                    "Filter by date",
-                    value=None,
-                    help="Filter captions by specific date"
-                )
-                date_filter_str = date_filter.isoformat() if date_filter else ""
-            
-            # Export and bulk actions
-            action_col1, action_col2, action_col3 = st.columns(3)
-            
-            with action_col1:
-                if st.button("📥 Export History", help="Download caption history as CSV"):
-                    csv_data = export_caption_history()
-                    if csv_data:
-                        st.download_button(
-                            label="💾 Download CSV",
-                            data=csv_data,
-                            file_name=f"caption_history_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                            mime="text/csv",
-                            use_container_width=True
-                        )
-                    else:
-                        st.error("No data to export")
-            
-            with action_col2:
-                if st.button("🗑️ Clear All History", help="Delete all used captions"):
-                    if st.session_state.get('confirm_clear_all'):
-                        # Clear the history
-                        used_captions = {}
-                        save_used_captions(used_captions)
-                        st.success("✅ All caption history cleared!")
-                        st.session_state.confirm_clear_all = False
-                        st.rerun()
-                    else:
-                        st.session_state.confirm_clear_all = True
-                        st.warning("⚠️ Click again to confirm deletion of ALL history")
-            
-            with action_col3:
-                if st.button("🔄 Refresh", help="Refresh the caption list"):
-                    st.rerun()
-            
-            # Search results
-            results = search_used_captions(search_query, business_filter, date_filter_str)
-            
-            if not results:
-                st.info("🔍 No captions found matching your criteria.")
-            else:
-                st.markdown(f"### 📋 Results ({len(results)} captions)")
-                
-                # Bulk selection
-                if len(results) > 1:
-                    select_all = st.checkbox("Select all captions", key="select_all_history")
-                    if select_all:
-                        selected_captions = [r['hash'] for r in results]
-                    else:
-                        selected_captions = []
-                else:
-                    selected_captions = []
-                
-                # Display results
-                for i, result in enumerate(results):
-                    with st.container():
-                        # Create columns for checkbox, caption info, and actions
-                        if len(results) > 1:
-                            check_col, content_col, action_col = st.columns([0.5, 8, 1.5])
-                        else:
-                            content_col, action_col = st.columns([8.5, 1.5])
-                            check_col = None
-                        
-                        # Checkbox for bulk operations
-                        if check_col:
-                            with check_col:
-                                is_selected = st.checkbox(
-                                    "",
-                                    value=result['hash'] in selected_captions,
-                                    key=f"select_{result['hash']}"
-                                )
-                                if is_selected and result['hash'] not in selected_captions:
-                                    selected_captions.append(result['hash'])
-                                elif not is_selected and result['hash'] in selected_captions:
-                                    selected_captions.remove(result['hash'])
-                        
-                        # Caption content
-                        with content_col:
-                            # Format date
-                            try:
-                                used_date = datetime.fromisoformat(result['used_date'])
-                                date_str = used_date.strftime('%Y-%m-%d %H:%M')
-                            except:
-                                date_str = result['used_date']
-                            
-                            # Header with metadata
-                            st.markdown(f"**Caption #{i+1}** | Business: {result['business'] or 'Unknown'} | Used: {date_str} | Count: {result['usage_count']}")
-                            
-                            # Caption text in expandable area
-                            with st.expander("📝 View Caption", expanded=False):
-                                st.text_area(
-                                    "",
-                                    value=result['text'],
-                                    height=100,
-                                    key=f"history_caption_{result['hash']}",
-                                    help="Caption text - click to expand",
-                                    label_visibility="collapsed"
-                                )
-                        
-                        # Action buttons
-                        with action_col:
-                            # Copy button removed for cleaner UI
-                            # if CLIPBOARD_AVAILABLE:
-                            #     if st.button("📋", key=f"copy_history_{result['hash']}", help="Copy caption"):
-                            #         safe_copy_to_clipboard(result['text'], success_message="Copied!", fallback_message="💡 Manual copy:")
-                            #     st.caption("Copy to Clipboard")
-                            
-                            # Unmark button
-                            if st.button("🔄", key=f"unmark_history_{result['hash']}", help="Remove from history"):
-                                if unmark_caption_as_used(result['text']):
-                                    st.success("Removed!")
-                                    st.rerun()
-                        
-                        st.markdown("---")
-                
-                # Bulk actions
-                if selected_captions:
-                    st.markdown(f"### 🔧 Bulk Actions ({len(selected_captions)} selected)")
-                    
-                    bulk_col1, bulk_col2 = st.columns(2)
-                    
-                    with bulk_col1:
-                        if st.button("🗑️ Delete Selected", type="secondary"):
-                            deleted_count = delete_multiple_captions(selected_captions)
-                            if deleted_count > 0:
-                                st.success(f"✅ Deleted {deleted_count} captions!")
-                                st.rerun()
-                            else:
-                                st.error("Failed to delete captions")
-                    
-                    with bulk_col2:
-                        # Copy functionality removed for cleaner UI  
-                        st.info("💡 Select text from captions below and use Ctrl+C to copy")
-
-    # Footer with enhanced examples and tips
-    st.markdown("---")
-    st.header("💡 Success Examples & Tips")
-    
-    examples_tab1, examples_tab2 = st.tabs(["🎯 Example Combinations", "📚 Best Practices"])
-    
-    with examples_tab1:
-        example_col1, example_col2, example_col3 = st.columns(3)
-        
-        with example_col1:
-            st.info("""
-            **🍝 Italian Restaurant**
-            
-            • **Website:** olivegarden.com
-            • **Image:** Fresh pasta dish
-            • **Style:** Casual & Friendly
-            • **Model:** GPT-4o-mini
-            • **Result:** Warm, inviting captions
-            """)
-        
-        with example_col2:
-            st.info("""
-            **💪 Fitness Studio**
-            
-            • **Website:** orangetheory.com  
-            • **Image:** Workout session
-            • **Style:** Inspirational
-            • **Model:** GPT-4o
-            • **Result:** Motivational content
-            """)
-        
-        with example_col3:
-            st.info("""
-            **☕ Coffee Shop**
-            
-            • **Website:** starbucks.com
-            • **Image:** Latte art
-            • **Style:** Professional
-            • **Model:** GPT-4o-mini
-            • **Result:** Brand-aligned posts
-            """)
-    
-    with examples_tab2:
-        tips_col1, tips_col2 = st.columns(2)
-        
-        with tips_col1:
-            st.markdown("""
-            ### 🎯 Image Best Practices
-            
-            ✅ **High-resolution photos** (1080x1080+ recommended)
-            ✅ **Good lighting** and clear subjects  
-            ✅ **Brand-relevant** content
-            ✅ **People in action** for engagement
-            ✅ **Behind-the-scenes** moments
-            
-            ❌ Avoid blurry or dark images
-            ❌ Skip overly complex compositions
-            ❌ Avoid copyrighted content
-            """)
-        
-        with tips_col2:
-            st.markdown("""
-            ### 🚀 Caption Optimization
-            
-            ✅ **Hook in first sentence** to grab attention
-            ✅ **Tell a story** that connects emotionally  
-            ✅ **Include value** for your audience
-            ✅ **End with clear CTA** when appropriate
-            ✅ **Match platform** character limits
-            
-            ❌ Don't oversell in every post
-            ❌ Avoid industry jargon
-            ❌ Skip generic phrases
-            """)
+    # Single Page Layout - All inputs and outputs on one page
+    handle_single_page_layout(template_config)
 
 def show_app_footer():
     """Display app footer with quick access to help and feedback."""
