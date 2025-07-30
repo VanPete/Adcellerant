@@ -1586,7 +1586,6 @@ def create_advanced_sidebar():
             st.markdown("""
             **Step 1:** Choose your content source:
             • Upload image files (PNG, JPG, JPEG, WebP)
-            • Paste from clipboard (system environments)
             • Use website images from analysis
             • Text-only mode for no-image posts
             
@@ -1599,19 +1598,19 @@ def create_advanced_sidebar():
             • Caption style (Professional, Casual, Inspirational, etc.)
             • Length (Short, Medium, Long)
             • Premium vs Standard AI model
-            • Include/exclude call-to-action
+            • Platform optimization and character limits
             
             **Step 4:** Generate & manage captions:
-            • Generate 3 unique captions
+            • Generate 3 unique captions with one click
             • Mark captions as used (with toggle)
-            • Copy to clipboard or download
-            • Duplicate detection system
+            • Download captions or save as company profile
+            • Duplicate detection system alerts you to similar content
             
             **Step 5:** Advanced features (optional):
-            • Save company profiles for reuse
-            • Batch process multiple images
-            • Search caption history
-            • Export usage data
+            • Save company profiles for instant reuse
+            • Search and manage caption history from sidebar
+            • Export usage data and analytics
+            • Use focus keywords and target audience settings
             """)
         
         with st.expander("💡 Pro Tips"):
@@ -1630,7 +1629,7 @@ def create_advanced_sidebar():
             • **Mark captions as used** to avoid duplicates
             
             **Organization Tips:**
-            • **Caption History** tab to review all used captions
+            • **Save generated captions** to review and reuse later
             • **Search & filter** used captions by business or date
             • **Export data** to CSV for external analysis
             • **Bulk delete** unwanted caption records
@@ -1642,8 +1641,8 @@ def create_advanced_sidebar():
             • **Website access blocked?** Try entering just business name/type
             • **Image upload fails?** Check file size (resize if needed)
             • **Slow generation?** Switch to Standard model (GPT-4o-mini)
-            • **Clipboard not working?** Use "Web Clipboard" alternative methods
-            • **Duplicate captions?** Check Caption History tab for marked used ones
+            • **Clipboard not working?** Use file upload instead
+            • **Duplicate captions?** Check the duplicate warnings when generating
             
             **Performance Issues:**
             • **App running slowly?** Use "Start Over" to clear session data
@@ -1651,9 +1650,9 @@ def create_advanced_sidebar():
             • **Large caption history?** Clear used captions periodically
             
             **Feature Issues:**
-            • **Tabs displaying wrong content?** Refresh the page
+            • **Page not responding?** Refresh the browser page
             • **Profile not loading?** Try re-selecting from dropdown
-            • **Batch processing stuck?** Check individual image file sizes
+            • **Generation stuck?** Check your internet connection
             """)
         
         with st.expander("🆘 Need Help?"):
@@ -1690,14 +1689,41 @@ def create_advanced_sidebar():
         if usage_stats['most_used_business'] != 'N/A':
             st.caption(f"🏆 Most Active: {usage_stats['most_used_business']}")
         
-        # Show option to clear used captions
+        # Show option to manage used captions
         if usage_stats['total_used'] > 0:
             with st.expander("🗑️ Manage Used Captions"):
-                st.warning(f"You have {usage_stats['total_used']} captions marked as used")
+                st.info(f"You have {usage_stats['total_used']} captions marked as used")
+                
+                # Add a search section for captions
+                st.markdown("**Search Used Captions:**")
+                search_query = st.text_input("Search captions:", placeholder="Enter keywords...")
+                
+                if search_query:
+                    results = search_used_captions(search_query)
+                    if results:
+                        st.write(f"Found {len(results)} matching captions:")
+                        for result in results[:5]:  # Show top 5 results
+                            st.text(f"• {result['text'][:100]}..." if len(result['text']) > 100 else f"• {result['text']}")
+                    else:
+                        st.write("No matching captions found.")
+                
+                st.markdown("**Bulk Actions:**")
                 if st.button("🔄 Clear All Used Captions", type="secondary"):
                     if os.path.exists(USED_CAPTIONS_FILE):
                         os.remove(USED_CAPTIONS_FILE)
                         st.success("✅ Cleared all used caption records")
+                        st.rerun()
+                
+                # Export option
+                if st.button("📥 Export Caption History", type="secondary"):
+                    csv_data = export_caption_history()
+                    if csv_data:
+                        st.download_button(
+                            "💾 Download CSV",
+                            data=csv_data,
+                            file_name=f"caption_history_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                            mime="text/csv"
+                        )
                         st.rerun()
                 st.caption("⚠️ This will reset duplicate detection")
         
@@ -1805,39 +1831,41 @@ def create_advanced_sidebar():
 def handle_single_page_layout(template_config):
     """Handle the single page layout with all inputs and outputs on one page."""
     
-    # Section 1: Image & Business Information
+    # ========================================
+    # SECTION 1: IMAGE & BUSINESS INFORMATION
+    # ========================================
     st.header("📸 Image & Business Information")
     
-    # Image input section
-    image_col1, image_col2 = st.columns([2, 1])
+    # Get current values from session state
+    current_image = st.session_state.get('current_image')
+    business_input = ""
+    website_url = ""
+    text_only_mode = False
     
-    with image_col1:
-        # Image mode selection
-        st.markdown("**📷 Content Mode:**")
-        mode_col1, mode_col2 = st.columns(2)
-        
-        with mode_col1:
-            text_only_mode = st.radio(
-                "Content Type",
-                ["Image + Text", "Text Only"],
-                index=1 if st.session_state.get('temp_text_only_mode', False) else 0,
-                help="Choose whether to include an image or create text-only posts"
-            )
-            text_only_mode = (text_only_mode == "Text Only")
-            st.session_state.temp_text_only_mode = text_only_mode
-        
-        with mode_col2:
-            if not text_only_mode:
-                image_source = st.radio(
-                    "Image Source",
-                    ["Upload File", "From Website", "Clipboard"],
-                    help="Choose how to provide your image"
-                )
-        
-        # Image upload/selection based on mode
-        current_image = None
+    # Create main layout columns
+    image_col, business_col = st.columns([1.5, 1])
+    
+    with image_col:
+        # Content mode selection
+        st.subheader("📷 Content Mode")
+        text_only_mode = st.radio(
+            "Choose content type:",
+            ["Image + Text", "Text Only"],
+            index=1 if st.session_state.get('temp_text_only_mode', False) else 0,
+            help="Choose whether to include an image or create text-only posts",
+            horizontal=True
+        ) == "Text Only"
         
         if not text_only_mode:
+            # Image source selection
+            image_source = st.radio(
+                "Image source:",
+                ["Upload File", "From Website", "Clipboard"],
+                help="Choose how to provide your image",
+                horizontal=True
+            )
+            
+            # Handle image upload/selection
             if image_source == "Upload File":
                 uploaded_file = st.file_uploader(
                     "Choose an image file",
@@ -1847,41 +1875,49 @@ def handle_single_page_layout(template_config):
                 if uploaded_file:
                     current_image = Image.open(uploaded_file)
                     st.session_state.current_image = current_image
+                    st.success("✅ Image uploaded successfully!")
             
-            elif image_source == "From Website" and st.session_state.get('website_analysis'):
-                website_images = st.session_state.website_analysis.get('images', [])
-                if website_images:
-                    selected_img_idx = st.selectbox(
-                        "Select website image",
-                        range(len(website_images)),
-                        format_func=lambda x: f"Image {x+1}: {website_images[x]['description'][:50]}..."
-                    )
-                    
-                    if st.button("🖼️ Use Selected Image"):
-                        try:
-                            img_url = website_images[selected_img_idx]['url']
-                            response = requests.get(img_url, timeout=10)
-                            current_image = Image.open(io.BytesIO(response.content))
-                            st.session_state.current_image = current_image
-                        except Exception as e:
-                            st.error(f"Failed to load image: {str(e)}")
+            elif image_source == "From Website":
+                if st.session_state.get('website_analysis'):
+                    website_images = st.session_state.website_analysis.get('images', [])
+                    if website_images:
+                        selected_img_idx = st.selectbox(
+                            "Select website image:",
+                            range(len(website_images)),
+                            format_func=lambda x: f"Image {x+1}: {website_images[x]['description'][:50]}..."
+                        )
+                        
+                        if st.button("🖼️ Use Selected Image"):
+                            try:
+                                img_url = website_images[selected_img_idx]['url']
+                                response = requests.get(img_url, timeout=10)
+                                current_image = Image.open(io.BytesIO(response.content))
+                                st.session_state.current_image = current_image
+                                st.success("✅ Website image loaded!")
+                            except Exception as e:
+                                st.error(f"Failed to load image: {str(e)}")
+                    else:
+                        st.info("No website images found. Analyze a website first.")
                 else:
-                    st.info("No website images available. Analyze a website first.")
+                    st.info("No website analysis available. Add a website URL and analyze it first.")
             
             elif image_source == "Clipboard":
-                st.info("💡 Use Ctrl+V to paste an image from your clipboard")
-                if st.button("📋 Paste from Clipboard"):
-                    st.info("This feature requires additional setup. Use file upload instead.")
+                st.info("💡 Clipboard feature not available. Please use file upload instead.")
             
-            # Show current image
-            if st.session_state.get('current_image'):
-                current_image = st.session_state.current_image
+            # Display current image
+            if current_image:
                 st.image(current_image, caption="Current Image", use_container_width=True)
+                if st.button("🗑️ Clear Image"):
+                    st.session_state.current_image = None
+                    st.rerun()
+        else:
+            st.info("📝 **Text-Only Mode:** Captions will be generated without image references.")
+    
+    with business_col:
+        # Business information
+        st.subheader("🏢 Business Information")
         
-        # Business information input
-        st.markdown("**🏢 Business Information:**")
-        
-        # Pre-fill from template or profile
+        # Pre-fill from loaded profile or template
         default_business = ""
         default_website = ""
         
@@ -1896,10 +1932,9 @@ def handle_single_page_layout(template_config):
             "Business Type / Company Description",
             value=default_business,
             placeholder="e.g., Italian restaurant, fitness studio, consulting firm, online store, etc.",
-            height=100,
+            height=120,
             help="Describe your business type or provide company details"
         )
-        st.session_state.temp_business_input = business_input
         
         website_url = st.text_input(
             "🔗 Website URL (Optional)",
@@ -1907,62 +1942,363 @@ def handle_single_page_layout(template_config):
             placeholder="https://yourcompany.com",
             help="Provide website URL for enhanced context (optional)"
         )
-        st.session_state.temp_website_url = website_url
         
-        # Website analysis button
+        # Website analysis
         if website_url and website_url.strip():
-            if st.button("🔍 Analyze Website"):
-                website_info = analyze_website_with_spinner(website_url.strip())
-                if website_info:
-                    st.session_state.website_analysis = website_info
-                    st.success("✅ Website analyzed successfully!")
-                    st.rerun()
-    
-    with image_col2:
-        st.markdown("**💡 Tips & Templates:**")
+            if st.button("🔍 Analyze Website", type="primary"):
+                with st.spinner("🌐 Analyzing website..."):
+                    website_info = analyze_website_with_spinner(website_url.strip())
+                    if website_info:
+                        st.session_state.website_analysis = website_info
+                        st.success("✅ Website analyzed successfully!")
+                        st.rerun()
         
-        # Business templates
-        templates = create_business_profile_template()
-        selected_template = st.selectbox(
-            "Quick Business Types",
-            ["Custom"] + list(templates.keys()),
-            help="Select a template to auto-fill settings"
-        )
-        
-        if selected_template != "Custom":
-            template = templates[selected_template]
-            template_config = template
-            st.success(f"✅ Template: {selected_template}")
-            
-            with st.expander("Template Details"):
-                st.write(f"**Style:** {template['tone']}")
-                st.write(f"**Keywords:** {', '.join(template['keywords'])}")
-                st.write(f"**CTA Style:** {template['cta_style']}")
-        
-        # Image tips
-        if not text_only_mode:
-            st.markdown("**📸 Image Tips:**")
-            st.info("""
-            • Use high-quality images (200x200+ pixels)
-            • Avoid images with too much text
-            • Choose images that represent your brand
-            • Consider your target audience
-            """)
-        else:
-            st.markdown("**📝 Text-Only Tips:**")
-            st.info("""
-            • Focus on compelling business descriptions
-            • Include key services or products
-            • Mention your unique value proposition
-            • Consider your brand personality
-            """)
+        # Show website analysis status
+        if st.session_state.get('website_analysis'):
+            analysis = st.session_state.website_analysis
+            st.success(f"✅ Website analyzed: {len(analysis.get('pages_analyzed', []))} pages")
     
-    st.markdown("---")
-    
-    # Store section 1 variables for use in other sections
+    # Store values in session state
     st.session_state.temp_business_input = business_input
     st.session_state.temp_website_url = website_url
     st.session_state.temp_text_only_mode = text_only_mode
+    
+    st.markdown("---")
+    
+    # ========================================
+    # SECTION 2: STYLE & CUSTOMIZATION
+    # ========================================
+    st.header("🎨 Style & Customization")
+    
+    style_col1, style_col2, style_col3 = st.columns(3)
+    
+    with style_col1:
+        st.subheader("📝 Caption Style")
+        
+        # Pre-fill from loaded profile or template
+        default_style = "Professional"
+        default_length = 1  # Medium
+        
+        if st.session_state.get('selected_company_profile'):
+            profile = st.session_state.selected_company_profile
+            default_style = profile.get('caption_style', 'Professional')
+            length_options = ["Short (3-4 sentences)", "Medium (4-6 sentences)", "Long (6+ sentences)"]
+            try:
+                default_length = length_options.index(profile.get('caption_length', 'Medium (4-6 sentences)'))
+            except ValueError:
+                default_length = 1
+        elif template_config:
+            default_style = template_config.get('tone', 'Professional')
+        
+        caption_style = st.selectbox(
+            "Style:",
+            ["Professional", "Casual & Friendly", "Inspirational", "Educational", "Promotional"],
+            index=["Professional", "Casual & Friendly", "Inspirational", "Educational", "Promotional"].index(default_style),
+            help="Choose the tone and style for your captions"
+        )
+        
+        caption_length = st.selectbox(
+            "Length:",
+            ["Short (3-4 sentences)", "Medium (4-6 sentences)", "Long (6+ sentences)"],
+            index=default_length,
+            help="Preferred length for generated captions"
+        )
+    
+    with style_col2:
+        st.subheader("⚙️ AI Settings")
+        
+        # Pre-fill from loaded profile
+        default_premium = False
+        default_cta = True
+        
+        if st.session_state.get('selected_company_profile'):
+            profile = st.session_state.selected_company_profile
+            default_premium = profile.get('use_premium_model', False)
+            default_cta = profile.get('include_cta', True)
+        
+        use_premium_model = st.checkbox(
+            "⭐ Use Premium Model (GPT-4o)",
+            value=default_premium,
+            help="Higher quality results but costs more. Uncheck for cost-effective GPT-4o-mini."
+        )
+        
+        include_cta = st.checkbox(
+            "🎯 Include Call-to-Action",
+            value=default_cta,
+            help="Add subtle calls-to-action in captions"
+        )
+        
+        # Character limit preference
+        character_limit_preference = st.selectbox(
+            "📱 Platform Optimization:",
+            ["No limit", "Facebook (≤500 chars)", "Instagram (≤400 chars)", "LinkedIn (≤700 chars)", "Twitter/X (≤280 chars)", "All platforms (≤280 chars)"],
+            help="Optimize captions to fit specific social media platform character limits"
+        )
+    
+    with style_col3:
+        st.subheader("🎯 Advanced Options")
+        
+        # Pre-fill advanced options from profile
+        default_focus = ""
+        default_avoid = ""
+        default_audience = 0
+        
+        if st.session_state.get('selected_company_profile'):
+            profile = st.session_state.selected_company_profile
+            default_focus = profile.get('focus_keywords', '')
+            default_avoid = profile.get('avoid_words', '')
+            audience_options = ["General", "Young Adults (18-35)", "Professionals", "Families", "Seniors", "Local Community"]
+            try:
+                default_audience = audience_options.index(profile.get('target_audience', 'General'))
+            except ValueError:
+                default_audience = 0
+        
+        focus_keywords = st.text_input(
+            "Focus Keywords:",
+            value=default_focus,
+            placeholder="e.g., organic, handmade, premium",
+            help="Keywords to emphasize in captions"
+        )
+        
+        avoid_words = st.text_input(
+            "Words to Avoid:",
+            value=default_avoid,
+            placeholder="e.g., cheap, basic, generic",
+            help="Words to avoid in captions"
+        )
+        
+        target_audience = st.selectbox(
+            "Target Audience:",
+            ["General", "Young Adults (18-35)", "Professionals", "Families", "Seniors", "Local Community"],
+            index=default_audience,
+            help="Tailor captions to specific audience"
+        )
+    
+    # Store style settings in session state
+    st.session_state.temp_caption_style = caption_style
+    st.session_state.temp_caption_length = caption_length
+    st.session_state.temp_use_premium_model = use_premium_model
+    st.session_state.temp_include_cta = include_cta
+    st.session_state.temp_focus_keywords = focus_keywords
+    st.session_state.temp_avoid_words = avoid_words
+    st.session_state.temp_target_audience = target_audience
+    st.session_state.temp_character_limit_preference = character_limit_preference
+    
+    st.markdown("---")
+    
+    # ========================================
+    # SECTION 3: GENERATION & RESULTS
+    # ========================================
+    st.header("🚀 Generate Captions")
+    
+    # Check if ready to generate
+    generation_ready = ((current_image is not None or text_only_mode) and 
+                        business_input and business_input.strip())
+    
+    if not generation_ready:
+        st.warning("⚠️ Please complete the following to generate captions:")
+        if not current_image and not text_only_mode:
+            st.write("• 📸 Upload an image or choose text-only mode")
+        if not business_input or not business_input.strip():
+            st.write("• 🏢 Enter business information")
+    else:
+        # Show current configuration
+        with st.expander("📋 Current Configuration", expanded=False):
+            config_col1, config_col2 = st.columns(2)
+            with config_col1:
+                st.write(f"**Business:** {business_input[:50]}{'...' if len(business_input) > 50 else ''}")
+                st.write(f"**Style:** {caption_style}")
+                st.write(f"**Length:** {caption_length}")
+                st.write(f"**Mode:** {'Text-Only' if text_only_mode else 'Image-Based'}")
+            with config_col2:
+                st.write(f"**Model:** {'GPT-4o (Premium)' if use_premium_model else 'GPT-4o-mini'}")
+                st.write(f"**CTA:** {'Yes' if include_cta else 'No'}")
+                st.write(f"**Website:** {'Analyzed' if st.session_state.get('website_analysis') else 'Not used'}")
+                st.write(f"**Platform:** {character_limit_preference}")
+        
+        # Generate button
+        generate_col1, generate_col2, generate_col3 = st.columns([1, 2, 1])
+        with generate_col2:
+            generate_button_text = "🚀 Generate Text-Only Captions" if text_only_mode else "🚀 Generate Image Captions"
+            
+            if st.button(generate_button_text, type="primary", use_container_width=True):
+                # Prepare enhanced business input
+                enhanced_business_input = business_input
+                if focus_keywords:
+                    enhanced_business_input += f" (focus on: {focus_keywords})"
+                if target_audience != "General":
+                    enhanced_business_input += f" (targeting: {target_audience})"
+                
+                # Generate captions
+                with st.spinner(f"🤖 Generating {'text-only ' if text_only_mode else ''}captions..."):
+                    result = generate_captions(
+                        current_image if not text_only_mode else None,
+                        enhanced_business_input,
+                        website_url,
+                        use_premium_model,
+                        caption_style,
+                        include_cta,
+                        caption_length,
+                        text_only_mode,
+                        character_limit_preference
+                    )
+                    
+                    if result:
+                        st.session_state.generated_captions = result
+                        
+                        # Update persistent captions counter
+                        new_total = increment_captions_generated(3)
+                        st.session_state.captions_generated = new_total
+                        
+                        # Store current settings for potential saving
+                        st.session_state.current_settings = {
+                            'business_input': business_input,
+                            'website_url': website_url,
+                            'caption_style': caption_style,
+                            'caption_length': caption_length,
+                            'use_premium_model': use_premium_model,
+                            'include_cta': include_cta,
+                            'focus_keywords': focus_keywords,
+                            'avoid_words': avoid_words,
+                            'target_audience': target_audience,
+                            'text_only_mode': text_only_mode,
+                            'character_limit_preference': character_limit_preference
+                        }
+                        
+                        st.success("✅ Captions generated successfully!")
+                        st.rerun()
+    
+    # ========================================
+    # SECTION 4: GENERATED CAPTIONS DISPLAY
+    # ========================================
+    if st.session_state.get('generated_captions'):
+        st.markdown("---")
+        st.header("📝 Your Generated Captions")
+        
+        captions = st.session_state.generated_captions.split('\n\n')
+        
+        for i, caption in enumerate(captions):
+            if caption.strip():
+                with st.container():
+                    # Check if caption was previously used
+                    is_duplicate, duplicate_info = is_caption_duplicate(caption.strip())
+                    
+                    # Caption header
+                    if is_duplicate:
+                        st.subheader(f"⚠️ Caption {i+1} (Previously Used)")
+                        st.warning(f"🔄 Similar caption used on {duplicate_info['used_date'][:10]} for {duplicate_info.get('business', 'Unknown')}")
+                    else:
+                        st.subheader(f"✨ Caption {i+1} (New)")
+                    
+                    # Caption content
+                    caption_col, action_col = st.columns([4, 1])
+                    
+                    with caption_col:
+                        st.text_area(
+                            "Caption Text:",
+                            value=caption.strip(),
+                            height=120,
+                            key=f"caption_display_{i}",
+                            help="Caption text - copy this to use in your social media posts"
+                        )
+                        
+                        # Character count and platform suitability
+                        char_count = len(caption.strip())
+                        
+                        platform_col1, platform_col2, platform_col3, platform_col4 = st.columns(4)
+                        with platform_col1:
+                            fb_suitable = "✅" if char_count <= 500 else "⚠️"
+                            st.caption(f"Facebook: {fb_suitable} ({char_count}/500)")
+                        with platform_col2:
+                            ig_suitable = "✅" if char_count <= 400 else "⚠️"
+                            st.caption(f"Instagram: {ig_suitable} ({char_count}/400)")
+                        with platform_col3:
+                            li_suitable = "✅" if char_count <= 700 else "⚠️"
+                            st.caption(f"LinkedIn: {li_suitable} ({char_count}/700)")
+                        with platform_col4:
+                            tw_suitable = "✅" if char_count <= 280 else "⚠️"
+                            st.caption(f"Twitter/X: {tw_suitable} ({char_count}/280)")
+                    
+                    with action_col:
+                        # Mark as used toggle
+                        is_currently_used = is_caption_duplicate(caption.strip())[0]
+                        
+                        if is_currently_used:
+                            if st.button(f"🔄 Unmark", key=f"unmark_{i}", help="Remove from usage history"):
+                                if unmark_caption_as_used(caption.strip()):
+                                    st.success("✅ Removed from history!")
+                                    st.rerun()
+                        else:
+                            if st.button(f"✅ Mark Used", key=f"mark_{i}", help="Mark as used"):
+                                mark_caption_as_used(caption.strip(), business_input)
+                                st.success("📝 Marked as used!")
+                                st.rerun()
+                
+                st.markdown("---")
+        
+        # ========================================
+        # SECTION 5: DOWNLOAD & SAVE OPTIONS
+        # ========================================
+        st.header("💾 Download & Save Options")
+        
+        download_col1, download_col2, download_col3, save_col = st.columns(4)
+        
+        with download_col1:
+            st.download_button(
+                label="📄 Download Captions",
+                data=st.session_state.generated_captions,
+                file_name=f"captions_{business_input.replace(' ', '_')}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        
+        with download_col2:
+            if current_image and not text_only_mode:
+                img_buffer = io.BytesIO()
+                current_image.save(img_buffer, format='PNG')
+                img_buffer.seek(0)
+                
+                st.download_button(
+                    label="🖼️ Download Image",
+                    data=img_buffer.getvalue(),
+                    file_name=f"image_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+                    mime="image/png",
+                    use_container_width=True
+                )
+            else:
+                st.info("No image to download")
+        
+        with download_col3:
+            # Create combined package
+            combined_content = f"Social Media Captions for {business_input}\n"
+            combined_content += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+            combined_content += f"Style: {caption_style} | Length: {caption_length}\n"
+            combined_content += f"Mode: {'Text-Only' if text_only_mode else 'Image-Based'}\n\n"
+            combined_content += "=" * 50 + "\n\n"
+            combined_content += st.session_state.generated_captions
+            
+            st.download_button(
+                label="📦 Download Package",
+                data=combined_content,
+                file_name=f"package_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        
+        with save_col:
+            # Company profile save option
+            if st.button("💾 Save Company", use_container_width=True):
+                if st.session_state.get('current_settings'):
+                    settings = st.session_state.current_settings
+                    profile_data = create_profile_data_from_settings(settings)
+                    company_name = settings.get('business_input', 'Unknown Company')
+                    
+                    if save_company_profile(company_name, profile_data):
+                        st.success(f"✅ Saved: {company_name}")
+                    else:
+                        st.error("❌ Failed to save")
+                else:
+                    st.warning("⚠️ No settings to save")
 
 # === Main Application Functions ===
 def initialize_session_state():
@@ -2042,62 +2378,66 @@ def show_documentation_popup():
             st.markdown("""
             ### 🎨 Complete Features Guide
             
-            #### **Tab 1: 📸 Image & Business**
-            - **Image Sources**: Upload files, paste from clipboard, use website images, or go text-only
+            #### **Section 1: 📸 Image & Business Information**
+            - **Content Modes**: Image + Text or Text-Only posting options
+            - **Image Sources**: Upload files, use website images, or clipboard
             - **Business Input**: Company name, business type, website URL
-            - **Quick Categories**: Pre-set business types for faster setup
-            - **Company Profiles**: Load saved company information instantly
+            - **Website Analysis**: Automatic analysis for brand context
+            - **Quick Templates**: Pre-configured business type templates
             
-            #### **Tab 2: 🎨 Style Settings**
+            #### **Section 2: 🎨 Style & Customization**
             - **Caption Styles**: Professional, Casual & Friendly, Inspirational, Educational, Promotional
             - **Length Options**: Short (3-4 sentences), Medium (4-6), Long (6+)
             - **AI Models**: Premium (GPT-4o) vs Standard (GPT-4o-mini)
-            - **Call-to-Action**: Include or exclude engagement prompts
+            - **Platform Optimization**: Character limits for specific social platforms
+            - **Advanced Options**: Focus keywords, target audience, words to avoid
             
-            #### **Tab 3: 🌐 Website Analysis**
-            - **Multi-Page Analysis**: Analyzes your entire website for context
-            - **Service Detection**: Automatically identifies your business services
-            - **Brand Voice**: Understands your company's tone and messaging
-            - **Image Extraction**: Finds suitable images from your website
+            #### **Section 3: 🚀 Generation & Results**
+            - **Smart Validation**: Checks that all required inputs are provided
+            - **Configuration Preview**: Shows current settings before generation
+            - **Real-time Generation**: AI-powered caption creation with progress indicators
+            - **Multiple Attempts**: Automatic retry for better variety if duplicates detected
             
-            #### **Tab 4: 📱 Generated Captions**
+            #### **Section 4: � Generated Captions Display**
             - **3 Unique Captions**: Each generation creates 3 different options
-            - **Copy to Clipboard**: One-click copying for easy use
-            - **Mark as Used**: Track which captions you've posted
+            - **Usage Tracking**: Mark captions as used to avoid duplicates
+            - **Platform Compatibility**: Shows character counts for different social platforms
             - **Duplicate Detection**: Warns if similar captions were used before
-            - **Download Options**: Save captions as text files
             
-            #### **Tab 5: 🔄 Batch Processing**
-            - **Multiple Images**: Process several images at once
-            - **Bulk Generation**: Create captions for entire photo sets
-            - **Progress Tracking**: See completion status for each image
-            - **Export All**: Download all generated captions together
-            
-            #### **Tab 6: 📝 Caption History**
-            - **Search Function**: Find captions by text or business name
-            - **Filter Options**: Filter by date range or specific businesses
-            - **Usage Analytics**: See which businesses you post most for
-            - **Bulk Management**: Delete multiple caption records at once
-            - **CSV Export**: Download usage data for external analysis
+            #### **Section 5: � Download & Save Options**
+            - **Multiple Formats**: Download captions, images, or combined packages
+            - **Company Profiles**: Save current settings for future use
+            - **Instant Access**: One-click downloading and saving
+            - **Organization**: Structured file naming for easy management
             """)
         
         with doc_tab3:
             st.markdown("""
             ### ⚙️ Advanced Usage Tips
             
+            #### **Single-Page Workflow:**
+            - **Top-to-Bottom Flow**: Complete each section in order for best results
+            - **Real-time Updates**: Changes are automatically saved as you work
+            - **Section Navigation**: Use section headers to quickly jump between areas
+            - **Live Preview**: See configuration summary before generating
+            
             #### **Company Profile Management:**
             - **Save Profiles**: Store business info, style preferences, and settings
-            - **Edit Mode**: Load existing profiles for updates
-            - **Quick Load**: Auto-fill all fields with one click
+            - **Quick Load**: Auto-fill all fields with one click from sidebar
             - **Profile Templates**: Use pre-configured settings for common business types
+            - **Batch Efficiency**: Save profiles for multiple clients or brands
             
             #### **Caption Optimization:**
             - **Website URLs**: Always include your website for better brand context
             - **Business Descriptions**: Be specific about your services/products
             - **Style Consistency**: Use the same style for brand voice consistency
-            - **Length Strategy**: Match caption length to platform (Instagram: Medium, LinkedIn: Long)
+            - **Platform Strategy**: Choose character limits based on your target platform
             
             #### **Duplicate Management:**
+            - **Usage Tracking**: Mark captions as used to build history
+            - **Smart Detection**: System warns about similar content automatically
+            - **Search & Filter**: Find specific captions in your history
+            - **Bulk Operations**: Manage multiple caption records at once
             - **Toggle Used Status**: Mark/unmark captions as used
             - **Similar Caption Warnings**: Get alerts for potential duplicates
             - **History Search**: Check if you've used similar content before
