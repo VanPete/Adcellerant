@@ -2683,7 +2683,7 @@ def handle_single_page_layout(template_config):
                         st.info("**Requirements:**\n• File size: 1KB - 50MB\n• Formats: PNG, JPEG, WebP\n• Resolution: 100×100 - 10000×10000 pixels\n• Valid image file (not corrupted)")
                 
                 # Only show batch management if there are valid images
-                if hasattr(st.session_state, 'batch_images') and st.session_state.batch_images:
+                if hasattr(st.session_state, 'batch_images') and st.session_state.batch_images and len(st.session_state.batch_images) > 0:
                     batch_images = st.session_state.batch_images
                     
                     # Display batch images preview with management
@@ -2693,7 +2693,7 @@ def handle_single_page_layout(template_config):
                     batch_mgmt_col1, batch_mgmt_col2, batch_mgmt_col3 = st.columns(3)
                     
                     with batch_mgmt_col1:
-                        if st.button("🗑️ Clear All Images", type="secondary"):
+                        if st.button("🗑️ Clear All Images", type="secondary", key="clear_batch_top"):
                             # Clear batch images and related data
                             if 'batch_images' in st.session_state:
                                 del st.session_state['batch_images']
@@ -2711,11 +2711,18 @@ def handle_single_page_layout(template_config):
                             st.rerun()
                     
                     with batch_mgmt_col2:
-                        total_size = sum(img['image'].size[0] * img['image'].size[1] for img in batch_images)
-                        st.metric("Total Images", len(batch_images))
+                        if batch_images:  # Safety check
+                            total_size = sum(img['image'].size[0] * img['image'].size[1] for img in batch_images)
+                            st.metric("Total Images", len(batch_images))
+                        else:
+                            st.metric("Total Images", 0)
                     
                     with batch_mgmt_col3:
-                        avg_resolution = f"{int(total_size / len(batch_images) / 1000000):.1f}MP avg" if batch_images else "0MP"
+                        if batch_images:  # Safety check
+                            total_size = sum(img['image'].size[0] * img['image'].size[1] for img in batch_images)
+                            avg_resolution = f"{int(total_size / len(batch_images) / 1000000):.1f}MP avg"
+                        else:
+                            avg_resolution = "0MP"
                         st.metric("Avg Resolution", avg_resolution)
                     
                     # Individual image management
@@ -2745,14 +2752,24 @@ def handle_single_page_layout(template_config):
                                     
                                     with img_col1:
                                         if st.button(f"🗑️ Remove", key=f"remove_{img_idx}"):
-                                            batch_images.pop(img_idx)
-                                            st.session_state.batch_images = batch_images
+                                            # Remove from session state directly
+                                            st.session_state.batch_images.pop(img_idx)
+                                            # Also clear selected image if it was the one removed
+                                            if hasattr(st.session_state, 'selected_batch_image') and st.session_state.selected_batch_image == img_idx:
+                                                del st.session_state['selected_batch_image']
+                                            # Adjust selected index if it's higher than removed index
+                                            elif hasattr(st.session_state, 'selected_batch_image') and st.session_state.selected_batch_image > img_idx:
+                                                st.session_state.selected_batch_image -= 1
+                                            st.success(f"✅ Removed {img_data['filename']}")
                                             st.rerun()
                                     
                                     with img_col2:
                                         if st.button(f"👁️ Preview", key=f"preview_{img_idx}"):
                                             st.session_state.current_image = img_data['image']
+                                            st.session_state.original_image = img_data['image'].copy()
                                             st.session_state.selected_batch_image = img_idx
+                                            st.success(f"✅ Selected {img_data['filename']} for editing")
+                                            st.rerun()
                     
                     # Show currently selected image for editing
                     if hasattr(st.session_state, 'selected_batch_image') and st.session_state.selected_batch_image is not None:
@@ -2921,7 +2938,7 @@ def handle_single_page_layout(template_config):
                     mgmt_col1, mgmt_col2, mgmt_col3 = st.columns(3)
                     
                     with mgmt_col1:
-                        if st.button("🗑️ Clear All Images", type="secondary", use_container_width=True):
+                        if st.button("🗑️ Clear All Images", type="secondary", use_container_width=True, key="clear_batch_bottom"):
                             # Clear all image and batch-related session state
                             image_keys_to_clear = [
                                 'batch_images', 'current_image', 'original_image',
