@@ -2198,13 +2198,13 @@ def handle_single_page_layout(template_config):
                                     "Twitter Post (1024×512)": (1024, 512),
                                     "YouTube Thumbnail (1280×720)": (1280, 720)
                                 }
-                            
-                            selected_preset = st.selectbox(
-                                "Choose preset:",
-                                list(preset_options.keys())
-                            )
-                            
-                            new_width, new_height = preset_options[selected_preset]
+                                
+                                selected_preset = st.selectbox(
+                                    "Choose preset:",
+                                    list(preset_options.keys())
+                                )
+                                
+                                new_width, new_height = preset_options[selected_preset]
                         
                         # Show new dimensions and apply button
                         st.info(f"New size will be: {new_width}×{new_height} pixels")
