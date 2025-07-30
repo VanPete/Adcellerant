@@ -1920,6 +1920,7 @@ def handle_single_page_layout(template_config):
         # Pre-fill from loaded profile or template
         default_business = ""
         default_website = ""
+        auto_filled_business = ""
         
         if st.session_state.get('selected_company_profile'):
             profile = st.session_state.selected_company_profile
@@ -1928,29 +1929,78 @@ def handle_single_page_layout(template_config):
         elif template_config:
             default_business = f"{template_config.get('type', 'business')} focusing on {', '.join(template_config.get('keywords', [])[:3])}"
         
-        business_input = st.text_area(
-            "Business Type / Company Description",
-            value=default_business,
-            placeholder="e.g., Italian restaurant, fitness studio, consulting firm, online store, etc.",
-            height=120,
-            help="Describe your business type or provide company details"
-        )
+        # Check if we have auto-filled business name from website
+        if st.session_state.get('auto_filled_business_name'):
+            auto_filled_business = st.session_state.auto_filled_business_name
+            # Use auto-filled name if no manual business input exists
+            if not default_business or default_business == st.session_state.get('previous_auto_fill', ''):
+                default_business = auto_filled_business
         
         website_url = st.text_input(
             "🔗 Website URL (Optional)",
             value=default_website,
             placeholder="https://yourcompany.com",
-            help="Provide website URL for enhanced context (optional)"
+            help="Provide website URL for enhanced context and auto-fill business name",
+            key="website_url_input"
         )
         
-        # Website analysis
+        # Auto-analyze website when URL changes
+        current_url = website_url.strip() if website_url else ""
+        previous_url = st.session_state.get('previous_website_url', '')
+        
+        # Normalize URL by adding https:// if missing
+        if current_url and not current_url.startswith(('http://', 'https://')):
+            current_url = 'https://' + current_url
+        
+        if current_url and current_url != previous_url and len(current_url) > 10:  # Basic URL validation
+            st.session_state.previous_website_url = current_url
+            
+            with st.spinner("🌐 Auto-analyzing website for business name..."):
+                website_info = analyze_website_with_spinner(current_url)
+                if website_info:
+                    st.session_state.website_analysis = website_info
+                    
+                    # Extract and clean business name from website title
+                    raw_title = website_info.get('title', '')
+                    if raw_title:
+                        # Clean the title - remove common suffixes and split by common separators
+                        clean_title = raw_title.split('|')[0].split('-')[0].split('–')[0].strip()
+                        
+                        # Remove common website suffixes
+                        suffixes_to_remove = [
+                            'Home', 'Welcome', 'Official Site', 'Official Website', 
+                            'Homepage', 'Main Page', 'Index', '.com', '.net', '.org'
+                        ]
+                        
+                        for suffix in suffixes_to_remove:
+                            if clean_title.endswith(suffix):
+                                clean_title = clean_title[:-len(suffix)].strip()
+                        
+                        # Store the auto-filled business name
+                        st.session_state.auto_filled_business_name = clean_title
+                        st.session_state.previous_auto_fill = clean_title
+                        
+                        # Show success message
+                        st.success(f"✅ Website analyzed! Auto-filled business name: **{clean_title}**")
+                        st.info("� You can edit the business name below if needed.")
+                        st.rerun()
+        
+        business_input = st.text_area(
+            "Business Type / Company Description",
+            value=default_business,
+            placeholder="e.g., Italian restaurant, fitness studio, consulting firm, online store, etc.",
+            height=120,
+            help="Describe your business type or provide company details (auto-filled from website if available)"
+        )
+        
+        # Manual website analysis button (for re-analysis or troubleshooting)
         if website_url and website_url.strip():
-            if st.button("🔍 Analyze Website", type="primary"):
-                with st.spinner("🌐 Analyzing website..."):
+            if st.button("� Re-analyze Website", type="secondary", help="Re-analyze website or force analysis"):
+                with st.spinner("🌐 Re-analyzing website..."):
                     website_info = analyze_website_with_spinner(website_url.strip())
                     if website_info:
                         st.session_state.website_analysis = website_info
-                        st.success("✅ Website analyzed successfully!")
+                        st.success("✅ Website re-analyzed successfully!")
                         st.rerun()
         
         # Show website analysis status
