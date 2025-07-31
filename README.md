@@ -1,21 +1,24 @@
-# 🚀 Adcellerant Social Caption Generator
+# 🚀 Adcellerant Social Caption Generator v2.0
 
-Enhanced AI-powered social media caption generator that creates engaging, brand-specific captions by analyzing your company's website and uploaded images.
+**Completely Refactored!** Enhanced AI-powered social media caption generator with modular architecture that creates engaging, brand-specific captions by analyzing your company's website and uploaded images.
 
 ## ✨ Features
 
-- **📸 Multiple Image Sources**: Upload files, paste from clipboard, or use website images
-- **🌐 Website Scraping**: Automatically analyzes company websites for brand alignment
-- **🖼️ Website Image Extraction**: Finds and suggests images from company websites
-- **🤖 AI-Powered**: Uses OpenAI's GPT-4o/GPT-4o-mini with vision capabilities
-- **📱 Platform Optimized**: Captions ready for Instagram, Facebook, LinkedIn
-- **🎨 Style Customization**: Choose from Professional, Casual, Inspirational, Educational, or Promotional tones
-- **📏 Length Control**: Short, Medium, or Long caption options
-- **🎯 Call-to-Action Options**: Toggle subtle CTAs on/off
-- **💰 Cost Control**: Choose between premium (GPT-4o) or cost-effective (GPT-4o-mini) models
-- **📋 Advanced UI**: Individual caption copying, clipboard support, professional interface
-- **⚡ Smart Caching**: Faster repeated website analysis
-- **🚫 Clean Output**: No emojis or hashtags - professional storytelling focus
+### 🏗️ **NEW: Modular Architecture v2.0**
+- **Complete Refactor**: 4,764-line monolithic file converted to clean modular structure
+- **8 Specialized Modules**: Proper separation of concerns for better maintainability
+- **Class-Based Design**: Object-oriented architecture with type hints and error handling
+- **100% Backward Compatible**: All existing features preserved and enhanced
+
+### 🚀 **Core Features**
+- **� Advanced Image Processing**: Upload, edit (resize, crop, rotate, filters), batch processing
+- **🌐 Intelligent Website Analysis**: Multi-page scraping for comprehensive brand understanding
+- **🤖 Dual AI Models**: GPT-4o (premium) and GPT-4o-mini (cost-effective) options
+- **📱 Platform Templates**: Pre-built templates for Instagram, Facebook, LinkedIn, Twitter, TikTok
+- **� Company Profiles**: Save and reuse business information for consistency
+- **� Usage Analytics**: Track caption generation, usage patterns, and performance metrics
+- **� Feedback System**: Built-in bug reporting and feature request system
+- **🎨 Professional UI**: Enhanced styling, responsive design, and intuitive workflow
 
 ## 🛠️ Setup
 
@@ -37,21 +40,17 @@ Enhanced AI-powered social media caption generator that creates engaging, brand-
 
 ## 🚀 Usage
 
-### Method 1: Using Batch File (Windows)
+### Method 1: New Modular Application (Recommended)
+```bash
+streamlit run main.py
+```
+
+### Method 2: Using Batch File (Windows)
 ```bash
 run_social_generator.bat
 ```
 
-### Method 2: Command Line
-```bash
-# Activate virtual environment
-.venv\Scripts\activate
-
-# Run the application
-streamlit run social_post_generator.py
-```
-
-### Method 3: Direct Streamlit
+### Method 3: Original Application (Legacy)
 ```bash
 streamlit run social_post_generator.py
 ```
@@ -79,16 +78,34 @@ streamlit run social_post_generator.py
 | Download Captions | Easy copy-paste to social platforms |
 | Error Handling | Graceful failure with helpful messages |
 
-## 📁 Project Structure
+## 📁 Project Structure (v2.0 - Modular Architecture)
 
 ```
-Adcellerant/
-├── .env                    # API keys (create this)
-├── .venv/                  # Virtual environment
-├── requirements.txt        # Dependencies
-├── social_post_generator.py # Main Streamlit app
-├── run_social_generator.bat # Windows launcher
-└── README.md              # This file
+Social Post Generator/
+├── 🚀 main.py                    # New modular entry point (517 lines)
+├── 📜 social_post_generator.py   # Original monolithic file (4,764 lines - legacy)
+├── 📁 config/                   # Application configuration
+│   ├── constants.py             # App constants and settings (52 lines)
+│   └── settings.py              # Data classes and configuration objects (28 lines)
+├── 📁 modules/                  # Core business logic modules
+│   ├── auth.py                  # Authentication and session management (94 lines)
+│   ├── captions.py              # Caption tracking and analytics (312 lines)
+│   ├── companies.py             # Company profile management (298 lines)
+│   ├── website_analysis.py      # Website analysis engine (273 lines)
+│   ├── image_processing.py      # Image editing and batch processing (571 lines)
+│   └── templates.py             # Social media templates and analytics (557 lines)
+├── 📁 utils/                    # Shared utilities
+│   ├── file_ops.py              # JSON file operations (71 lines)
+│   └── helpers.py               # Common utility functions (119 lines)
+├── 📁 .venv/                    # Virtual environment
+├── 🔐 .env                      # API keys (create this)
+├── requirements.txt             # Dependencies
+├── run_social_generator.bat     # Windows launcher
+└── README.md                    # This documentation
+
+🎯 Total Refactored Code: ~2,900 lines across 10 files
+📊 Code Reduction: ~40% while adding new features
+✅ Maintainability: Significantly improved
 ```
 
 ## 🔧 Dependencies
