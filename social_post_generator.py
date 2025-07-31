@@ -852,7 +852,10 @@ def clear_all_session_data():
         # UI state
         'show_save_options', 'show_documentation', 'show_feedback',
         'image_selection_mode', 'company_selector', 'management_mode',
-        'delete_selector', 'edit_selector', 'website_url_input',
+        'delete_selector', 'edit_selector', 'website_url_field',
+        
+        # Form field keys that need explicit clearing
+        'business_input_field', 'website_url_input',
         
         # Current settings for saving
         'current_settings'
@@ -2731,8 +2734,9 @@ def handle_single_page_layout(template_config):
                     if 'images_to_remove' not in st.session_state:
                         st.session_state.images_to_remove = []
                     
-                    # Create grid layout for previews with individual controls
-                    cols_per_row = 3
+                    # Create enhanced grid layout for previews with better caption visibility
+                    cols_per_row = 2  # Reduced from 3 to 2 for better caption readability
+                    st.markdown("#### 🖼️ Images & Generated Captions")
                     for i in range(0, len(batch_images), cols_per_row):
                         cols = st.columns(cols_per_row)
                         
@@ -2742,6 +2746,9 @@ def handle_single_page_layout(template_config):
                                 img_data = batch_images[img_idx]
                                 
                                 with col:
+                                    # Wrap in styled container
+                                    st.markdown('<div class="batch-image-column">', unsafe_allow_html=True)
+                                    
                                     # Image preview
                                     st.image(
                                         img_data['image'], 
@@ -2754,26 +2761,64 @@ def handle_single_page_layout(template_config):
                                         if img_idx < len(st.session_state.batch_captions):
                                             image_captions = st.session_state.batch_captions[img_idx]
                                             if image_captions and image_captions.strip():
-                                                st.markdown("**📝 Generated Captions:**")
+                                                # Enhanced caption display with better visibility
+                                                st.markdown("---")  # Visual separator
+                                                st.markdown("### 📝 Generated Captions")
                                                 
                                                 # Split captions and display each one
                                                 caption_list = [cap.strip() for cap in image_captions.split('\n\n') if cap.strip()]
                                                 for cap_idx, caption in enumerate(caption_list):
                                                     if caption.strip():
-                                                        with st.expander(f"Caption {cap_idx + 1}", expanded=cap_idx == 0):
+                                                        # Create a more prominent container for each caption
+                                                        with st.container():
+                                                            col_cap_header, col_cap_actions = st.columns([3, 1])
+                                                            
+                                                            with col_cap_header:
+                                                                st.markdown(f"**✨ Caption {cap_idx + 1}**")
+                                                            
+                                                            with col_cap_actions:
+                                                                char_count = len(caption.strip())
+                                                                # Color-coded character count
+                                                                if char_count <= 280:
+                                                                    st.success(f"📊 {char_count} chars")
+                                                                elif char_count <= 400:
+                                                                    st.warning(f"📊 {char_count} chars")
+                                                                else:
+                                                                    st.error(f"📊 {char_count} chars")
+                                                            
+                                                            # Enhanced text area with better styling
                                                             st.text_area(
-                                                                "Caption Text:",
+                                                                "Ready to copy:",
                                                                 value=caption.strip(),
-                                                                height=100,
+                                                                height=120,  # Increased height
                                                                 key=f"batch_img_{img_idx}_cap_{cap_idx}",
-                                                                help="Copy this caption to use in your social media posts"
+                                                                help="📋 Select all (Ctrl+A) and copy (Ctrl+C) to use in your social media posts",
+                                                                label_visibility="collapsed"
                                                             )
                                                             
-                                                            # Character count
-                                                            char_count = len(caption.strip())
-                                                            st.caption(f"📊 {char_count} characters")
+                                                            # Platform suitability indicators
+                                                            plat_col1, plat_col2, plat_col3, plat_col4 = st.columns(4)
+                                                            with plat_col1:
+                                                                fb_icon = "✅" if char_count <= 500 else "⚠️"
+                                                                st.caption(f"{fb_icon} Facebook")
+                                                            with plat_col2:
+                                                                ig_icon = "✅" if char_count <= 400 else "⚠️"
+                                                                st.caption(f"{ig_icon} Instagram")
+                                                            with plat_col3:
+                                                                li_icon = "✅" if char_count <= 700 else "⚠️"
+                                                                st.caption(f"{li_icon} LinkedIn")
+                                                            with plat_col4:
+                                                                tw_icon = "✅" if char_count <= 280 else "⚠️"
+                                                                st.caption(f"{tw_icon} Twitter/X")
+                                                            
+                                                            st.markdown("---")  # Separator between captions
                                     else:
+                                        st.markdown("---")
                                         st.info("💡 Generate captions to see them here")
+                                        st.markdown("---")
+                                    
+                                    # Close styled container
+                                    st.markdown('</div>', unsafe_allow_html=True)
                     
                     # Show currently selected image for editing
                     if hasattr(st.session_state, 'selected_batch_image') and st.session_state.selected_batch_image is not None:
@@ -3134,7 +3179,7 @@ def handle_single_page_layout(template_config):
             value=default_website,
             placeholder="https://yourcompany.com",
             help="Provide website URL for enhanced context and auto-fill business name",
-            key="website_url_input"
+            key="website_url_field"
         )
         
         # Auto-analyze website when URL changes
@@ -3183,7 +3228,8 @@ def handle_single_page_layout(template_config):
             value=default_business,
             placeholder="e.g., Italian restaurant, fitness studio, consulting firm, online store, etc.",
             height=120,
-            help="Describe your business type or provide company details (auto-filled from website if available)"
+            help="Describe your business type or provide company details (auto-filled from website if available)",
+            key="business_input_field"
         )
         
         # Manual website analysis button (for re-analysis or troubleshooting)
@@ -4618,6 +4664,50 @@ def main():
     # Check authentication first
     if not check_password():
         return
+    
+    # Add custom CSS for better caption visibility
+    st.markdown("""
+    <style>
+    /* Enhanced styling for batch caption areas */
+    .batch-caption-container {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 10px 0;
+        border-left: 4px solid #1f77b4;
+    }
+    
+    /* Make text areas more prominent */
+    .stTextArea > div > div > textarea {
+        background-color: #ffffff !important;
+        border: 2px solid #e0e0e0 !important;
+        border-radius: 8px !important;
+        font-size: 14px !important;
+        line-height: 1.5 !important;
+        padding: 12px !important;
+    }
+    
+    .stTextArea > div > div > textarea:focus {
+        border-color: #1f77b4 !important;
+        box-shadow: 0 0 0 2px rgba(31, 119, 180, 0.2) !important;
+    }
+    
+    /* Platform indicator styling */
+    .platform-indicator {
+        font-weight: bold;
+        font-size: 12px;
+    }
+    
+    /* Better spacing for batch images */
+    .batch-image-column {
+        margin-bottom: 30px;
+        padding: 15px;
+        background-color: #fafafa;
+        border-radius: 12px;
+        border: 1px solid #e0e0e0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
     # Initialize session state
     initialize_session_state()
